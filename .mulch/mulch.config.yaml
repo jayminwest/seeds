@@ -1,6 +1,7 @@
 version: '1'
 domains:
   - docs
+  - orchestration
 governance:
   max_entries: 100
   warn_entries: 150
