@@ -1,53 +1,36 @@
-// --- Issue ---
-
-export type IssueStatus = "open" | "in_progress" | "closed";
-export type IssueType = "task" | "bug" | "feature" | "epic";
-
 export interface Issue {
-	// Identity
-	id: string; // "{project}-{4hex}", e.g. "overstory-a1b2"
-
-	// Core
+	id: string;
 	title: string;
-	status: IssueStatus;
-	type: IssueType;
-	priority: number; // 0=critical, 1=high, 2=medium, 3=low, 4=backlog
-
-	// Optional
+	status: "open" | "in_progress" | "closed";
+	type: "task" | "bug" | "feature" | "epic";
+	priority: number;
 	assignee?: string;
 	description?: string;
-	notes?: string;
-	design?: string;
 	closeReason?: string;
-
-	// Dependencies
-	blocks?: string[]; // Issue IDs this blocks
-	blockedBy?: string[]; // Issue IDs blocking this
-
-	// Template convoy
-	convoyId?: string; // Set when poured from a template
-
-	// Timestamps
-	createdAt: string; // ISO 8601
-	updatedAt: string; // ISO 8601
-	closedAt?: string; // ISO 8601, set on close
+	blocks?: string[];
+	blockedBy?: string[];
+	convoy?: string;
+	createdAt: string;
+	updatedAt: string;
+	closedAt?: string;
 }
 
-// --- Template (Molecule) ---
-
 export interface TemplateStep {
-	title: string; // Supports {prefix} interpolation
-	type?: string; // Default: "task"
-	priority?: number; // Default: 2
+	title: string;
+	type?: string;
+	priority?: number;
 }
 
 export interface Template {
-	id: string; // "tpl-{4hex}"
+	id: string;
 	name: string;
 	steps: TemplateStep[];
 }
 
-// --- Convoy ---
+export interface Config {
+	project: string;
+	version: string;
+}
 
 export interface ConvoyStatus {
 	templateId: string;
@@ -55,17 +38,19 @@ export interface ConvoyStatus {
 	completed: number;
 	inProgress: number;
 	blocked: number;
-	issues: string[]; // IDs of created issues, in step order
+	issues: string[];
 }
 
-// --- Config ---
+export const SEEDS_DIR_NAME = ".seeds";
+export const ISSUES_FILE = "issues.jsonl";
+export const TEMPLATES_FILE = "templates.jsonl";
+export const CONFIG_FILE = "config.yaml";
+export const LOCK_STALE_MS = 30_000;
+export const LOCK_RETRY_MS = 50;
+export const LOCK_TIMEOUT_MS = 5_000;
 
-export interface Config {
-	project: string;
-	version: string;
-}
-
-// --- Constants ---
+export const VALID_TYPES = ["task", "bug", "feature", "epic"] as const;
+export const VALID_STATUSES = ["open", "in_progress", "closed"] as const;
 
 export const PRIORITY_LABELS: Record<number, string> = {
 	0: "Critical",
@@ -73,19 +58,4 @@ export const PRIORITY_LABELS: Record<number, string> = {
 	2: "Medium",
 	3: "Low",
 	4: "Backlog",
-};
-
-export const PRIORITY_MAX = 4;
-
-export const STATUS_LABELS: Record<IssueStatus, string> = {
-	open: "Open",
-	in_progress: "In Progress",
-	closed: "Closed",
-};
-
-export const TYPE_LABELS: Record<IssueType, string> = {
-	task: "Task",
-	bug: "Bug",
-	feature: "Feature",
-	epic: "Epic",
 };

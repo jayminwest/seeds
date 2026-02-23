@@ -48,10 +48,7 @@ await Bun.write(pkgPath, newPkgText);
 // --- Update src/index.ts ---
 const indexPath = new URL("../src/index.ts", import.meta.url).pathname;
 const indexText = await Bun.file(indexPath).text();
-const newIndexText = indexText.replace(
-	`const VERSION = "${current}"`,
-	`const VERSION = "${next}"`,
-);
+const newIndexText = indexText.replace(`const VERSION = "${current}"`, `const VERSION = "${next}"`);
 if (newIndexText === indexText) {
 	console.error(`Could not find 'const VERSION = "${current}"' in src/index.ts`);
 	// Rollback package.json
