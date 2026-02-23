@@ -1,5 +1,6 @@
 version: '1'
-domains: []
+domains:
+  - cicd
 governance:
   max_entries: 100
   warn_entries: 150
