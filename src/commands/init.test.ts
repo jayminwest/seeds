@@ -8,7 +8,10 @@ let tmpDir: string;
 // Path to the CLI entry point (relative to repo root)
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
-async function run(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function run(
+	args: string[],
+	cwd: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
 		cwd,
 		stdout: "pipe",

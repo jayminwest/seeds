@@ -7,7 +7,10 @@ let tmpDir: string;
 
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
-async function run(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function run(
+	args: string[],
+	cwd: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
 		cwd,
 		stdout: "pipe",
@@ -233,10 +236,11 @@ describe("sd list", () => {
 		);
 		await run(["update", c2.id, "--status", "in_progress"], tmpDir);
 
-		const result = await runJson<{ success: boolean; issues: Array<{ id: string }>; count: number }>(
-			["list", "--status", "open"],
-			tmpDir,
-		);
+		const result = await runJson<{
+			success: boolean;
+			issues: Array<{ id: string }>;
+			count: number;
+		}>(["list", "--status", "open"], tmpDir);
 		expect(result.count).toBe(1);
 		expect(result.issues[0]?.id).toBe(c1.id);
 	});

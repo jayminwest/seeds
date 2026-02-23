@@ -162,7 +162,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	if (subcmd === "pour") {
 		const templateId = positional[1];
 		if (!templateId) throw new Error("Usage: sd tpl pour <id> --prefix ...");
-		const prefix = typeof flags.prefix === "string" ? flags.prefix : "";
+		if (typeof flags.prefix !== "string") throw new Error("--prefix is required");
+		const prefix = flags.prefix;
 
 		const templates = await readTemplates(dir);
 		const tpl = templates.find((t) => t.id === templateId);
@@ -256,7 +257,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		};
 
 		if (jsonMode) {
-			outputJson({ success: true, command: "tpl status", ...status });
+			outputJson({ success: true, command: "tpl status", status });
 		} else {
 			console.log(`${c.bold}Convoy: ${templateId}${c.reset}`);
 			console.log(`  Total:       ${status.total}`);

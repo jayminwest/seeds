@@ -9,12 +9,12 @@ export async function run(args: string[]): Promise<void> {
 	const seedsDir = join(cwd, SEEDS_DIR_NAME);
 
 	if (existsSync(join(seedsDir, CONFIG_FILE))) {
-		const msg = ".seeds/ already initialized";
 		if (jsonMode) {
-			outputJson({ success: false, command: "init", error: msg });
-			process.exit(1);
+			outputJson({ success: true, command: "init", dir: seedsDir });
+		} else {
+			printSuccess(`Already initialized: ${seedsDir}`);
 		}
-		throw new Error(msg);
+		return;
 	}
 
 	mkdirSync(seedsDir, { recursive: true });

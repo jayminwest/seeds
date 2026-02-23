@@ -7,7 +7,10 @@ let tmpDir: string;
 
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
-async function run(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function run(
+	args: string[],
+	cwd: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
 		cwd,
 		stdout: "pipe",
@@ -252,8 +255,8 @@ describe("sd tpl pour", () => {
 			tmpDir,
 		);
 		const ids = ready.issues.map((i) => i.id);
-		expect(ids).toContain(pour.ids[0]);
-		expect(ids).not.toContain(pour.ids[1]);
+		expect(ids).toContain(pour.ids[0] ?? "");
+		expect(ids).not.toContain(pour.ids[1] ?? "");
 	});
 
 	test("requires --prefix", async () => {

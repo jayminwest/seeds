@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Issue } from "./types";
 import { appendIssue, readIssues, withLock, writeIssues } from "./store";
+import type { Issue } from "./types";
 
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
 	const now = new Date().toISOString();
@@ -46,7 +46,7 @@ describe("readIssues", () => {
 
 	test("reads single issue", async () => {
 		const issue = makeIssue();
-		await Bun.write(join(seedsDir, "issues.jsonl"), JSON.stringify(issue) + "\n");
+		await Bun.write(join(seedsDir, "issues.jsonl"), `${JSON.stringify(issue)}\n`);
 		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(1);
 		expect(issues[0]).toEqual(issue);
@@ -75,7 +75,7 @@ describe("readIssues", () => {
 
 	test("skips blank lines", async () => {
 		const issue = makeIssue();
-		const content = "\n" + JSON.stringify(issue) + "\n\n";
+		const content = `\n${JSON.stringify(issue)}\n\n`;
 		await Bun.write(join(seedsDir, "issues.jsonl"), content);
 		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(1);
@@ -132,10 +132,7 @@ describe("writeIssues", () => {
 	});
 
 	test("each issue serialized to its own line", async () => {
-		const issues = [
-			makeIssue({ id: "test-a1b2" }),
-			makeIssue({ id: "test-c3d4" }),
-		];
+		const issues = [makeIssue({ id: "test-a1b2" }), makeIssue({ id: "test-c3d4" })];
 		await writeIssues(seedsDir, issues);
 		const content = await Bun.file(join(seedsDir, "issues.jsonl")).text();
 		const lines = content.split("\n").filter((l) => l.trim() !== "");

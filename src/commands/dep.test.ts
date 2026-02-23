@@ -7,7 +7,10 @@ let tmpDir: string;
 
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
-async function run(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function run(
+	args: string[],
+	cwd: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
 		cwd,
 		stdout: "pipe",
@@ -55,10 +58,7 @@ afterEach(async () => {
 
 describe("sd dep add", () => {
 	test("adds dependency between two issues", async () => {
-		const result = await runJson<{ success: boolean }>(
-			["dep", "add", id2, id1],
-			tmpDir,
-		);
+		const result = await runJson<{ success: boolean }>(["dep", "add", id2, id1], tmpDir);
 		expect(result.success).toBe(true);
 	});
 
@@ -120,10 +120,7 @@ describe("sd dep remove", () => {
 	});
 
 	test("removes dependency", async () => {
-		const result = await runJson<{ success: boolean }>(
-			["dep", "remove", id2, id1],
-			tmpDir,
-		);
+		const result = await runJson<{ success: boolean }>(["dep", "remove", id2, id1], tmpDir);
 		expect(result.success).toBe(true);
 	});
 
