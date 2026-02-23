@@ -1,6 +1,6 @@
 version: '1'
 domains:
-  - cicd
+  - docs
 governance:
   max_entries: 100
   warn_entries: 150
