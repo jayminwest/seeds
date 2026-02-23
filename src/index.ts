@@ -17,6 +17,7 @@ Issue commands:
   blocked                 Show all blocked issues
   stats                   Project statistics
   sync                    Stage and commit .seeds/ changes
+  doctor                  Check project health and data integrity
 
 Template commands:
   tpl create              Create a template
@@ -85,6 +86,9 @@ async function main(): Promise<void> {
 			break;
 		case "sync":
 			await (await import("./commands/sync.ts")).run(args);
+			break;
+		case "doctor":
+			await (await import("./commands/doctor.ts")).run(args);
 			break;
 		case "tpl":
 			await (await import("./commands/tpl.ts")).run(args);
