@@ -30,6 +30,10 @@ Template commands:
 Migration:
   migrate-from-beads      Migrate issues from beads
 
+Agent integration:
+  prime                   Output AI agent context
+  onboard                 Add seeds section to CLAUDE.md
+
 Global flags:
   --json                  Output as JSON
   --version               Show version
@@ -95,6 +99,12 @@ async function main(): Promise<void> {
 			break;
 		case "migrate-from-beads":
 			await (await import("./commands/migrate.ts")).run(args);
+			break;
+		case "prime":
+			await (await import("./commands/prime.ts")).run(args);
+			break;
+		case "onboard":
+			await (await import("./commands/onboard.ts")).run(args);
 			break;
 		default:
 			throw new Error(`Unknown command: ${cmd}. Run \`sd --help\` for usage.`);
