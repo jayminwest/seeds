@@ -1,0 +1,14 @@
+[
+	{
+		"id": "group-8d567544",
+		"name": "seeds-build",
+		"memberIssueIds": [
+			"seeds-l1q",
+			"seeds-awf",
+			"seeds-5mn"
+		],
+		"status": "completed",
+		"createdAt": "2026-02-23T15:22:31.132Z",
+		"completedAt": "2026-02-23T15:58:09.778Z"
+	}
+]
