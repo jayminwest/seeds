@@ -42,6 +42,7 @@ seeds/
     config.ts                 # YAML config load/save
     output.ts                 # JSON + human output helpers
     yaml.ts                   # Minimal YAML parser (flat key-value only)
+    markers.ts                # Marker-delimited section helpers (onboard)
     commands/
       init.ts                 # sd init
       create.ts               # sd create
@@ -56,6 +57,10 @@ seeds/
       stats.ts                # sd stats
       tpl.ts                  # sd tpl create/step/list/show/pour/status
       migrate.ts              # sd migrate-from-beads
+      doctor.ts               # sd doctor
+      prime.ts                # sd prime
+      onboard.ts              # sd onboard
+    markers.test.ts           # Marker section tests
     store.test.ts             # Core data layer tests
     id.test.ts                # ID generation tests
     yaml.test.ts              # YAML parser tests
@@ -64,6 +69,9 @@ seeds/
       create.test.ts
       dep.test.ts
       tpl.test.ts
+      doctor.test.ts
+      prime.test.ts
+      onboard.test.ts
 ```
 
 ## Build & Test Commands
@@ -124,6 +132,16 @@ sd blocked                             Show all blocked issues
 sd stats                               Project statistics
 sd sync                                Stage and commit .seeds/ changes
   --status                             Check without committing
+sd doctor                              Check project health and data integrity
+  --fix                                Fix auto-fixable issues
+```
+
+### Agent Integration Commands
+
+```
+sd prime                               Output AI agent context
+  --compact                            Condensed quick-reference output
+sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
 ```
 
 ### Template (Molecule) Commands

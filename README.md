@@ -104,6 +104,21 @@ sd tpl pour <id> --prefix <text>       Instantiate template into issues
 sd tpl status <id>                     Show convoy completion status
 ```
 
+### Project Health
+
+```
+sd doctor                              Check project health and data integrity
+  --fix                Fix auto-fixable issues
+```
+
+### Agent Integration
+
+```
+sd prime                               Output AI agent context (PRIME.md or built-in)
+  --compact            Condensed quick-reference output
+sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
+```
+
 ### Migration
 
 ```bash

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 const USAGE = `seeds — git-native issue tracker
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-23
+
+### Added
+- `sd doctor` command — validates project health: config, JSONL integrity, field validation, dependency consistency, stale locks, gitattributes, and `.gitignore`. Supports `--fix` for auto-fixable issues
+- `sd prime` command — outputs AI agent context (PRIME.md or built-in reference). Supports `--compact` for condensed output
+- `sd onboard` command — adds seeds section to CLAUDE.md/AGENTS.md with marker-delimited sections for idempotent updates
+- `src/markers.ts` utility for marker-delimited section management (used by `onboard`)
+- CODEOWNERS file for branch protection
+
 ## [0.1.0] - 2026-02-23
 
 ### Added
@@ -24,5 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jayminwest/seeds/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jayminwest/seeds/releases/tag/v0.1.0
