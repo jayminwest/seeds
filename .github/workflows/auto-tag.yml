@@ -1,0 +1,61 @@
+name: Auto-Tag
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+jobs:
+  auto-tag:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get version from src/index.ts
+        id: src
+        run: |
+          VERSION=$(grep -oP 'const VERSION = "\K[^"]+' src/index.ts)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify versions match
+        run: |
+          if [ "${{ steps.pkg.outputs.version }}" != "${{ steps.src.outputs.version }}" ]; then
+            echo "Version mismatch: package.json=${{ steps.pkg.outputs.version }}, src/index.ts=${{ steps.src.outputs.version }}"
+            exit 1
+          fi
+          echo "Versions match: ${{ steps.pkg.outputs.version }}"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          VERSION="v${{ steps.pkg.outputs.version }}"
+          if git tag -l "$VERSION" | grep -q "$VERSION"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION does not exist, will create."
+          fi
+
+      - name: Create tag and GitHub release
+        if: steps.tag_check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v${{ steps.pkg.outputs.version }}"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" \
+            --generate-notes \
+            --title "Release $VERSION"
