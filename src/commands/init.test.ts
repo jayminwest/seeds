@@ -1,60 +1,83 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 let tmpDir: string;
-let origCwd: string;
 
-beforeEach(() => {
-	tmpDir = mkdtempSync(join(tmpdir(), "seeds-init-test-"));
-	origCwd = process.cwd();
-	process.chdir(tmpDir);
+// Path to the CLI entry point (relative to repo root)
+const CLI = join(import.meta.dir, "../../src/index.ts");
+
+async function run(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const stdout = await new Response(proc.stdout).text();
+	const stderr = await new Response(proc.stderr).text();
+	const exitCode = await proc.exited;
+	return { stdout, stderr, exitCode };
+}
+
+beforeEach(async () => {
+	tmpDir = await mkdtemp(join(tmpdir(), "seeds-init-test-"));
 });
 
-afterEach(() => {
-	process.chdir(origCwd);
-	rmSync(tmpDir, { recursive: true, force: true });
+afterEach(async () => {
+	await rm(tmpDir, { recursive: true, force: true });
 });
 
 describe("sd init", () => {
-	test("creates .seeds/ directory", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		expect(existsSync(join(tmpDir, ".seeds"))).toBe(true);
+	test("creates .seeds directory", async () => {
+		const { exitCode } = await run(["init"], tmpDir);
+		expect(exitCode).toBe(0);
+		const stat = await Bun.file(join(tmpDir, ".seeds", "config.yaml")).exists();
+		expect(stat).toBe(true);
 	});
 
-	test("creates config.yaml", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		expect(existsSync(join(tmpDir, ".seeds", "config.yaml"))).toBe(true);
+	test("creates config.yaml with project name", async () => {
+		await run(["init"], tmpDir);
+		const config = await Bun.file(join(tmpDir, ".seeds", "config.yaml")).text();
+		expect(config).toContain("project:");
+		expect(config).toContain("version:");
 	});
 
-	test("creates issues.jsonl", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		expect(existsSync(join(tmpDir, ".seeds", "issues.jsonl"))).toBe(true);
+	test("creates empty issues.jsonl", async () => {
+		await run(["init"], tmpDir);
+		const exists = await Bun.file(join(tmpDir, ".seeds", "issues.jsonl")).exists();
+		expect(exists).toBe(true);
 	});
 
-	test("creates templates.jsonl", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		expect(existsSync(join(tmpDir, ".seeds", "templates.jsonl"))).toBe(true);
+	test("creates empty templates.jsonl", async () => {
+		await run(["init"], tmpDir);
+		const exists = await Bun.file(join(tmpDir, ".seeds", "templates.jsonl")).exists();
+		expect(exists).toBe(true);
 	});
 
-	test("creates .seeds/.gitignore with *.lock", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		const file = Bun.file(join(tmpDir, ".seeds", ".gitignore"));
-		const content = await file.text();
-		expect(content).toContain("*.lock");
+	test("creates .gitignore ignoring lock files", async () => {
+		await run(["init"], tmpDir);
+		const gitignore = await Bun.file(join(tmpDir, ".seeds", ".gitignore")).text();
+		expect(gitignore).toContain("*.lock");
 	});
 
-	test("creates .gitattributes with merge=union", async () => {
-		await import("../commands/init.ts").then((m) => m.run([]));
-		const file = Bun.file(join(tmpDir, ".gitattributes"));
-		const content = await file.text();
-		expect(content).toContain("merge=union");
+	test("appends gitattributes to project root", async () => {
+		await run(["init"], tmpDir);
+		const gitattributes = await Bun.file(join(tmpDir, ".gitattributes")).text();
+		expect(gitattributes).toContain(".seeds/issues.jsonl merge=union");
+		expect(gitattributes).toContain(".seeds/templates.jsonl merge=union");
 	});
 
-	test("throws if already initialized", async () => {
-		const mod = await import("../commands/init.ts");
-		await mod.run([]);
-		await expect(mod.run([])).rejects.toThrow("already initialized");
+	test("is idempotent — second init does not fail", async () => {
+		await run(["init"], tmpDir);
+		const { exitCode } = await run(["init"], tmpDir);
+		expect(exitCode).toBe(0);
+	});
+
+	test("--json flag returns success JSON", async () => {
+		const { stdout, exitCode } = await run(["init", "--json"], tmpDir);
+		expect(exitCode).toBe(0);
+		const result = JSON.parse(stdout) as { success: boolean };
+		expect(result.success).toBe(true);
 	});
 });

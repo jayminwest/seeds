@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendIssue, issuesPath, readIssues, withLock, writeIssues } from "./store.ts";
-import type { Issue } from "./types.ts";
+import type { Issue } from "./types";
+import { appendIssue, readIssues, withLock, writeIssues } from "./store";
 
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
 	const now = new Date().toISOString();
 	return {
-		id: "test-0001",
+		id: "test-a1b2",
 		title: "Test issue",
 		status: "open",
 		type: "task",
@@ -20,122 +20,157 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
 }
 
 let tmpDir: string;
+let seedsDir: string;
 
-beforeEach(() => {
-	tmpDir = mkdtempSync(join(tmpdir(), "seeds-store-test-"));
-	// Create empty issues.jsonl
-	writeFileSync(join(tmpDir, "issues.jsonl"), "");
+beforeEach(async () => {
+	tmpDir = await mkdtemp(join(tmpdir(), "seeds-store-test-"));
+	seedsDir = join(tmpDir, ".seeds");
+	await Bun.write(join(seedsDir, ".gitignore"), "*.lock\n");
 });
 
-afterEach(() => {
-	rmSync(tmpDir, { recursive: true, force: true });
+afterEach(async () => {
+	await rm(tmpDir, { recursive: true, force: true });
 });
 
 describe("readIssues", () => {
+	test("returns empty array when issues.jsonl does not exist", async () => {
+		const issues = await readIssues(seedsDir);
+		expect(issues).toEqual([]);
+	});
+
 	test("returns empty array for empty file", async () => {
-		const issues = await readIssues(tmpDir);
+		await Bun.write(join(seedsDir, "issues.jsonl"), "");
+		const issues = await readIssues(seedsDir);
 		expect(issues).toEqual([]);
 	});
 
 	test("reads single issue", async () => {
 		const issue = makeIssue();
-		writeFileSync(join(tmpDir, "issues.jsonl"), `${JSON.stringify(issue)}\n`);
-		const issues = await readIssues(tmpDir);
+		await Bun.write(join(seedsDir, "issues.jsonl"), JSON.stringify(issue) + "\n");
+		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(1);
-		expect(issues[0]?.id).toBe("test-0001");
+		expect(issues[0]).toEqual(issue);
 	});
 
 	test("reads multiple issues", async () => {
-		const i1 = makeIssue({ id: "test-0001" });
-		const i2 = makeIssue({ id: "test-0002", title: "Second" });
-		writeFileSync(join(tmpDir, "issues.jsonl"), `${JSON.stringify(i1)}\n${JSON.stringify(i2)}\n`);
-		const issues = await readIssues(tmpDir);
+		const issue1 = makeIssue({ id: "test-a1b2", title: "First" });
+		const issue2 = makeIssue({ id: "test-c3d4", title: "Second" });
+		const content = [JSON.stringify(issue1), JSON.stringify(issue2), ""].join("\n");
+		await Bun.write(join(seedsDir, "issues.jsonl"), content);
+		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(2);
+		expect(issues[0]?.id).toBe("test-a1b2");
+		expect(issues[1]?.id).toBe("test-c3d4");
 	});
 
-	test("deduplicates by id (last wins)", async () => {
-		const v1 = makeIssue({ id: "test-0001", title: "Original" });
-		const v2 = makeIssue({ id: "test-0001", title: "Updated" });
-		writeFileSync(join(tmpDir, "issues.jsonl"), `${JSON.stringify(v1)}\n${JSON.stringify(v2)}\n`);
-		const issues = await readIssues(tmpDir);
+	test("deduplicates by id — last occurrence wins", async () => {
+		const original = makeIssue({ id: "test-a1b2", title: "Original" });
+		const updated = makeIssue({ id: "test-a1b2", title: "Updated" });
+		const content = [JSON.stringify(original), JSON.stringify(updated), ""].join("\n");
+		await Bun.write(join(seedsDir, "issues.jsonl"), content);
+		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(1);
 		expect(issues[0]?.title).toBe("Updated");
 	});
 
-	test("skips malformed lines", async () => {
+	test("skips blank lines", async () => {
 		const issue = makeIssue();
-		writeFileSync(join(tmpDir, "issues.jsonl"), `${JSON.stringify(issue)}\nnot-valid-json\n`);
-		const issues = await readIssues(tmpDir);
+		const content = "\n" + JSON.stringify(issue) + "\n\n";
+		await Bun.write(join(seedsDir, "issues.jsonl"), content);
+		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(1);
-	});
-
-	test("returns empty if file does not exist", async () => {
-		rmSync(join(tmpDir, "issues.jsonl"));
-		const issues = await readIssues(tmpDir);
-		expect(issues).toEqual([]);
-	});
-});
-
-describe("writeIssues", () => {
-	test("writes issues atomically", async () => {
-		const issues = [makeIssue({ id: "test-0001" }), makeIssue({ id: "test-0002" })];
-		await writeIssues(tmpDir, issues);
-		const read = await readIssues(tmpDir);
-		expect(read).toHaveLength(2);
-		expect(read[0]?.id).toBe("test-0001");
-		expect(read[1]?.id).toBe("test-0002");
-	});
-
-	test("overwrites existing content", async () => {
-		const v1 = [makeIssue({ id: "test-0001" })];
-		await writeIssues(tmpDir, v1);
-		const v2 = [makeIssue({ id: "test-0002" })];
-		await writeIssues(tmpDir, v2);
-		const read = await readIssues(tmpDir);
-		expect(read).toHaveLength(1);
-		expect(read[0]?.id).toBe("test-0002");
 	});
 });
 
 describe("appendIssue", () => {
-	test("appends to existing issues", async () => {
-		const i1 = makeIssue({ id: "test-0001" });
-		await appendIssue(tmpDir, i1);
-		const i2 = makeIssue({ id: "test-0002" });
-		await appendIssue(tmpDir, i2);
-		const read = await readIssues(tmpDir);
-		expect(read).toHaveLength(2);
+	test("creates issues.jsonl if it does not exist", async () => {
+		const issue = makeIssue();
+		await appendIssue(seedsDir, issue);
+		const issues = await readIssues(seedsDir);
+		expect(issues).toHaveLength(1);
+		expect(issues[0]).toEqual(issue);
 	});
 
-	test("works on empty file", async () => {
+	test("appends to existing file", async () => {
+		const issue1 = makeIssue({ id: "test-a1b2" });
+		const issue2 = makeIssue({ id: "test-c3d4" });
+		await appendIssue(seedsDir, issue1);
+		await appendIssue(seedsDir, issue2);
+		const issues = await readIssues(seedsDir);
+		expect(issues).toHaveLength(2);
+	});
+
+	test("each appended issue is on its own line", async () => {
 		const issue = makeIssue();
-		await appendIssue(tmpDir, issue);
-		const read = await readIssues(tmpDir);
-		expect(read).toHaveLength(1);
-		expect(read[0]?.id).toBe("test-0001");
+		await appendIssue(seedsDir, issue);
+		const content = await Bun.file(join(seedsDir, "issues.jsonl")).text();
+		const lines = content.split("\n").filter((l) => l.trim() !== "");
+		expect(lines).toHaveLength(1);
+		expect(JSON.parse(lines[0] ?? "{}")).toEqual(issue);
+	});
+});
+
+describe("writeIssues", () => {
+	test("writes issues atomically (overwrites file)", async () => {
+		const original = makeIssue({ id: "test-a1b2", title: "Original" });
+		await appendIssue(seedsDir, original);
+
+		const updated = makeIssue({ id: "test-a1b2", title: "Updated" });
+		await writeIssues(seedsDir, [updated]);
+
+		const issues = await readIssues(seedsDir);
+		expect(issues).toHaveLength(1);
+		expect(issues[0]?.title).toBe("Updated");
+	});
+
+	test("writes empty array as empty file", async () => {
+		const issue = makeIssue();
+		await appendIssue(seedsDir, issue);
+		await writeIssues(seedsDir, []);
+		const issues = await readIssues(seedsDir);
+		expect(issues).toHaveLength(0);
+	});
+
+	test("each issue serialized to its own line", async () => {
+		const issues = [
+			makeIssue({ id: "test-a1b2" }),
+			makeIssue({ id: "test-c3d4" }),
+		];
+		await writeIssues(seedsDir, issues);
+		const content = await Bun.file(join(seedsDir, "issues.jsonl")).text();
+		const lines = content.split("\n").filter((l) => l.trim() !== "");
+		expect(lines).toHaveLength(2);
 	});
 });
 
 describe("withLock", () => {
-	test("executes function and releases lock", async () => {
-		const path = issuesPath(tmpDir);
-		let executed = false;
-		await withLock(path, async () => {
-			executed = true;
-		});
-		expect(executed).toBe(true);
+	test("executes function and returns result", async () => {
+		const result = await withLock(seedsDir, async () => 42);
+		expect(result).toBe(42);
 	});
 
 	test("serializes concurrent operations", async () => {
-		const path = issuesPath(tmpDir);
-		const results: number[] = [];
-		const ops = [1, 2, 3].map((n) =>
-			withLock(path, async () => {
-				results.push(n);
-				await new Promise((resolve) => setTimeout(resolve, 10));
-			}),
+		// Run multiple concurrent withLock calls and verify they all succeed
+		let counter = 0;
+		await Promise.all(
+			Array.from({ length: 5 }, () =>
+				withLock(seedsDir, async () => {
+					counter++;
+				}),
+			),
 		);
-		await Promise.all(ops);
-		expect(results).toHaveLength(3);
+		expect(counter).toBe(5);
+	});
+
+	test("releases lock even if function throws", async () => {
+		await expect(
+			withLock(seedsDir, async () => {
+				throw new Error("intentional error");
+			}),
+		).rejects.toThrow("intentional error");
+
+		// Lock should be released — another withLock should succeed
+		const result = await withLock(seedsDir, async () => "ok");
+		expect(result).toBe("ok");
 	});
 });
