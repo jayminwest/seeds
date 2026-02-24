@@ -729,7 +729,7 @@ function reportResults(
 	}
 
 	if (summary.fail > 0) {
-		process.exit(1);
+		process.exitCode = 1;
 	}
 }
 
