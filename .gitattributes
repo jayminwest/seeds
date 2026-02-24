@@ -1,6 +1,3 @@
-
-# Use bd merge for beads JSONL files
-.beads/issues.jsonl merge=beads
 .mulch/expertise/*.jsonl merge=union
 
 .seeds/issues.jsonl merge=union

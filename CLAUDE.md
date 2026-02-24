@@ -232,18 +232,6 @@ Version lives in two locations (verified in sync by CI):
 
 Bump via: `bun run version:bump <major|minor|patch>`
 
-## Issue Tracking
-
-This project uses **bd (beads)** for issue tracking.
-
-**Quick reference:**
-- `bd ready` — Find unblocked work
-- `bd show <id>` — View issue details
-- `bd create "Title" --type task --priority 2` — Create issue
-- `bd update <id> --status in_progress` — Claim work
-- `bd close <id>` — Complete work
-- `bd sync` — Sync with git (run at session end)
-
 ## Session Completion Protocol
 
 When ending a work session, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
@@ -254,7 +242,7 @@ When ending a work session, you MUST complete ALL steps below. Work is NOT compl
 4. **Push to remote** (MANDATORY):
    ```bash
    git pull --rebase
-   bd sync
+   sd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -299,3 +287,29 @@ Run `mulch --help` for full usage.
    mulch sync
    ```
 <!-- mulch:end -->
+
+<!-- seeds:start -->
+## Issue Tracking (Seeds)
+<!-- seeds-onboard-v:1 -->
+
+This project uses [Seeds](https://github.com/jayminwest/seeds) for git-native issue tracking.
+
+**At the start of every session**, run:
+```
+sd prime
+```
+
+This injects session context: rules, command reference, and workflows.
+
+**Quick reference:**
+- `sd ready` — Find unblocked work
+- `sd create --title "..." --type task --priority 2` — Create issue
+- `sd update <id> --status in_progress` — Claim work
+- `sd close <id>` — Complete work
+- `sd sync` — Sync with git (run before pushing)
+
+### Before You Finish
+1. Close completed issues: `sd close <id>`
+2. File issues for remaining work: `sd create --title "..."`
+3. Sync and push: `sd sync && git push`
+<!-- seeds:end -->
