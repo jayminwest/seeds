@@ -1,7 +1,8 @@
+import chalk from "chalk";
 import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
-import { c, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
+import { outputJson, printIssueOneLine, printSuccess } from "../output.ts";
 import {
 	appendIssue,
 	appendTemplate,
@@ -130,7 +131,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			}
 			for (const tpl of templates) {
 				console.log(
-					`${c.bold}${tpl.id}${c.reset}  ${tpl.name}  ${c.gray}(${tpl.steps.length} steps)${c.reset}`,
+					`${chalk.bold(tpl.id)}  ${tpl.name}  ${chalk.gray(`(${tpl.steps.length} steps)`)}`,
 				);
 			}
 		}
@@ -148,11 +149,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "tpl show", template: tpl });
 		} else {
-			console.log(`${c.bold}${tpl.id}${c.reset}  ${tpl.name}`);
+			console.log(`${chalk.bold(tpl.id)}  ${tpl.name}`);
 			console.log(`Steps (${tpl.steps.length}):`);
 			tpl.steps.forEach((step, i) => {
 				console.log(
-					`  ${i + 1}. ${step.title}  ${c.gray}[${step.type ?? "task"} P${step.priority ?? 2}]${c.reset}`,
+					`  ${i + 1}. ${step.title}  ${chalk.gray(`[${step.type ?? "task"} P${step.priority ?? 2}]`)}`,
 				);
 			});
 		}
@@ -260,7 +261,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "tpl status", status });
 		} else {
-			console.log(`${c.bold}Convoy: ${templateId}${c.reset}`);
+			console.log(`${chalk.bold(`Convoy: ${templateId}`)}`);
 			console.log(`  Total:       ${status.total}`);
 			console.log(`  Completed:   ${completed}`);
 			console.log(`  In progress: ${inProgress}`);

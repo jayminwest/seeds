@@ -1,6 +1,7 @@
+import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { c, outputJson } from "../output.ts";
+import { outputJson } from "../output.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { PRIORITY_LABELS } from "../types.ts";
@@ -38,18 +39,18 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			stats: { total, open, inProgress, closed, blocked, byType, byPriority },
 		});
 	} else {
-		console.log(`${c.bold}Project Statistics${c.reset}`);
+		console.log(`${chalk.bold("Project Statistics")}`);
 		console.log(`  Total:       ${total}`);
 		console.log(`  Open:        ${open}`);
 		console.log(`  In progress: ${inProgress}`);
 		console.log(`  Closed:      ${closed}`);
 		console.log(`  Blocked:     ${blocked}`);
-		console.log(`\n${c.bold}By Type${c.reset}`);
+		console.log(`\n${chalk.bold("By Type")}`);
 		for (const [type, count] of Object.entries(byType)) {
 			console.log(`  ${type.padEnd(10)} ${count}`);
 		}
 		if (Object.keys(byPriority).length > 0) {
-			console.log(`\n${c.bold}By Priority${c.reset}`);
+			console.log(`\n${chalk.bold("By Priority")}`);
 			for (const [p, count] of Object.entries(byPriority)) {
 				const label = PRIORITY_LABELS[Number(p)] ?? String(p);
 				console.log(`  P${p} ${label.padEnd(10)} ${count}`);
