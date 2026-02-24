@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-02-24
+
+### Added
+- `sd upgrade` command — check for and install latest version from npm (`--check` for version check only)
+- `--quiet` / `-q` global flag — suppress non-error output
+- `--verbose` global flag — extra diagnostic output
+- `--dry-run` flag on `sd sync` — preview what would be committed without committing
+- `printWarning()` helper in `output.ts`
+
+### Changed
+- Applied os-eco forest branding palette: `brand` (green), `accent` (amber), `muted` (gray) replace raw chalk colors across all commands
+- Status icons updated to ASCII-safe set: `✓` (pass), `!` (warn), `✗` (fail), `>` (in-progress), `-` (open), `x` (closed)
+- Version flag changed from `-V` to `-v` (standard convention)
+- `--version --json` now returns structured `{name, version, runtime, platform}` object
+- npm publish workflow: switched from `--provenance` to token-based auth via `NPM_TOKEN` secret
+
 ## [0.2.1] - 2026-02-24
 
 ### Changed
@@ -52,7 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/jayminwest/seeds/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jayminwest/seeds/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jayminwest/seeds/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jayminwest/seeds/releases/tag/v0.1.0

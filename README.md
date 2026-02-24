@@ -51,7 +51,7 @@ sd sync
 
 ## CLI Reference
 
-Every command supports `--json` for structured output. ANSI colors respect `NO_COLOR`.
+Every command supports `--json` for structured output. Global flags: `-v`/`--version`, `-q`/`--quiet`, `--verbose`. ANSI colors respect `NO_COLOR`.
 
 ### Issue Commands
 
@@ -91,6 +91,7 @@ sd stats                               Project statistics
 
 sd sync                                Stage and commit .seeds/ changes
   --status             Check without committing
+  --dry-run            Show what would be committed without committing
 ```
 
 ### Template (Molecule) Commands
@@ -117,6 +118,13 @@ sd doctor                              Check project health and data integrity
 sd prime                               Output AI agent context (PRIME.md or built-in)
   --compact            Condensed quick-reference output
 sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
+```
+
+### Self-Update
+
+```
+sd upgrade                             Upgrade seeds to latest version from npm
+  --check              Check for updates without installing
 ```
 
 ### Migration

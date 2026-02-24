@@ -60,6 +60,7 @@ seeds/
       doctor.ts               # sd doctor
       prime.ts                # sd prime
       onboard.ts              # sd onboard
+      upgrade.ts              # sd upgrade
     markers.test.ts           # Marker section tests
     store.test.ts             # Core data layer tests
     id.test.ts                # ID generation tests
@@ -107,7 +108,7 @@ Git merge strategy: `merge=union` gitattribute on JSONL files. Dedup-on-read (la
 
 Binary name: `sd`
 
-Every command supports `--json` for structured output.
+Every command supports `--json` for structured output. Global flags: `-v`, `-q`/`--quiet`, `--verbose`.
 
 ### Issue Commands
 
@@ -132,6 +133,7 @@ sd blocked                             Show all blocked issues
 sd stats                               Project statistics
 sd sync                                Stage and commit .seeds/ changes
   --status                             Check without committing
+  --dry-run                            Show what would be committed
 sd doctor                              Check project health and data integrity
   --fix                                Fix auto-fixable issues
 ```
@@ -142,6 +144,8 @@ sd doctor                              Check project health and data integrity
 sd prime                               Output AI agent context
   --compact                            Condensed quick-reference output
 sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
+sd upgrade                             Upgrade seeds to latest version from npm
+  --check                              Check for updates without installing
 ```
 
 ### Template (Molecule) Commands
