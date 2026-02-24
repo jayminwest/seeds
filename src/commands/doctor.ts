@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
 import { c, outputJson } from "../output.ts";
 import { issuesPath, readIssues, templatesPath, writeIssues, writeTemplates } from "../store.ts";
@@ -729,4 +730,20 @@ function reportResults(
 	if (summary.fail > 0) {
 		process.exit(1);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("doctor")
+		.description("Check project health and data integrity")
+		.option("--fix", "Auto-fix fixable issues")
+		.option("--verbose", "Show all check results including passes")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { fix?: boolean; verbose?: boolean; json?: boolean }) => {
+			const args: string[] = [];
+			if (opts.fix) args.push("--fix");
+			if (opts.verbose) args.push("--verbose");
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

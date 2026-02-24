@@ -1,3 +1,4 @@
+import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
 import { c, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
@@ -276,4 +277,82 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	throw new Error(
 		`Unknown tpl subcommand: ${subcmd}. Use create, step, list, show, pour, or status.`,
 	);
+}
+
+export function register(program: Command): void {
+	const tpl = new Command("tpl").description("Manage issue templates (molecules)");
+
+	tpl
+		.command("create")
+		.description("Create a new template")
+		.requiredOption("--name <text>", "Template name")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { name: string; json?: boolean }) => {
+			const args: string[] = ["create", "--name", opts.name];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	const step = new Command("step").description("Manage template steps");
+	step
+		.command("add <id>")
+		.description("Add a step to a template")
+		.requiredOption("--title <text>", "Step title")
+		.option("--type <type>", "Step type (task|bug|feature|epic)", "task")
+		.option("--priority <n>", "Step priority 0-4", "2")
+		.option("--json", "Output as JSON")
+		.action(
+			async (
+				id: string,
+				opts: { title: string; type?: string; priority?: string; json?: boolean },
+			) => {
+				const args: string[] = ["step", "add", id, "--title", opts.title];
+				if (opts.type) args.push("--type", opts.type);
+				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.json) args.push("--json");
+				await run(args);
+			},
+		);
+	tpl.addCommand(step);
+
+	tpl
+		.command("list")
+		.description("List all templates")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { json?: boolean }) => {
+			await run(opts.json ? ["list", "--json"] : ["list"]);
+		});
+
+	tpl
+		.command("show <id>")
+		.description("Show template with steps")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, opts: { json?: boolean }) => {
+			const args: string[] = ["show", id];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	tpl
+		.command("pour <id>")
+		.description("Instantiate template into issues")
+		.requiredOption("--prefix <text>", "Prefix for issue titles")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, opts: { prefix: string; json?: boolean }) => {
+			const args: string[] = ["pour", id, "--prefix", opts.prefix];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	tpl
+		.command("status <id>")
+		.description("Show convoy status for a template")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, opts: { json?: boolean }) => {
+			const args: string[] = ["status", id];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	program.addCommand(tpl);
 }

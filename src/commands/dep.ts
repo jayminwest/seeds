@@ -1,3 +1,4 @@
+import { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { c, outputJson, printIssueOneLine } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
@@ -105,4 +106,40 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	throw new Error(`Unknown dep subcommand: ${subcmd}. Use add, remove, or list.`);
+}
+
+export function register(program: Command): void {
+	const dep = new Command("dep").description("Manage issue dependencies");
+
+	dep
+		.command("add <issue> <depends-on>")
+		.description("Add a dependency (issue depends on depends-on)")
+		.option("--json", "Output as JSON")
+		.action(async (issue: string, dependsOn: string, opts: { json?: boolean }) => {
+			const args: string[] = ["add", issue, dependsOn];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	dep
+		.command("remove <issue> <depends-on>")
+		.description("Remove a dependency")
+		.option("--json", "Output as JSON")
+		.action(async (issue: string, dependsOn: string, opts: { json?: boolean }) => {
+			const args: string[] = ["remove", issue, dependsOn];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	dep
+		.command("list <issue>")
+		.description("Show dependencies for an issue")
+		.option("--json", "Output as JSON")
+		.action(async (issue: string, opts: { json?: boolean }) => {
+			const args: string[] = ["list", issue];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
+
+	program.addCommand(dep);
 }

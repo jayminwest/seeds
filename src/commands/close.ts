@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
@@ -77,4 +78,18 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			printSuccess(`Closed ${id}${reason ? ` — ${reason}` : ""}`);
 		}
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("close <id> [ids...]")
+		.description("Close one or more issues")
+		.option("--reason <text>", "Close reason")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, ids: string[], opts: { reason?: string; json?: boolean }) => {
+			const args: string[] = [id, ...ids];
+			if (opts.reason) args.push("--reason", opts.reason);
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

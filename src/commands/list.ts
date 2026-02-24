@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printIssueOneLine } from "../output.ts";
 import { readIssues } from "../store.ts";
@@ -66,4 +67,32 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		console.log(`\n${issues.length} issue(s)`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("list")
+		.description("List issues with filters")
+		.option("--status <status>", "Filter by status (open|in_progress|closed)")
+		.option("--type <type>", "Filter by type (task|bug|feature|epic)")
+		.option("--assignee <name>", "Filter by assignee")
+		.option("--limit <n>", "Max issues to show", "50")
+		.option("--json", "Output as JSON")
+		.action(
+			async (opts: {
+				status?: string;
+				type?: string;
+				assignee?: string;
+				limit?: string;
+				json?: boolean;
+			}) => {
+				const args: string[] = [];
+				if (opts.status) args.push("--status", opts.status);
+				if (opts.type) args.push("--type", opts.type);
+				if (opts.assignee) args.push("--assignee", opts.assignee);
+				if (opts.limit) args.push("--limit", opts.limit);
+				if (opts.json) args.push("--json");
+				await run(args);
+			},
+		);
 }

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Command } from "commander";
 import { outputJson, printSuccess } from "../output.ts";
 import { CONFIG_FILE, ISSUES_FILE, SEEDS_DIR_NAME, TEMPLATES_FILE } from "../types.ts";
 
@@ -46,4 +47,14 @@ export async function run(args: string[]): Promise<void> {
 	} else {
 		printSuccess(`Initialized .seeds/ in ${cwd}`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("init")
+		.description("Initialize .seeds/ in current directory")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { json?: boolean }) => {
+			await run(opts.json ? ["--json"] : []);
+		});
 }
