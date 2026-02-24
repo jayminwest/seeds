@@ -3,6 +3,7 @@ name: Publish to npm
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -19,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - run: bun install

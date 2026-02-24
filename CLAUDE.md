@@ -1,6 +1,6 @@
 # Seeds
 
-Git-native issue tracker for AI agent workflows. Zero dependencies, JSONL storage, Bun runtime. Replaces beads in the overstory/mulch ecosystem.
+Git-native issue tracker for AI agent workflows. Minimal dependencies, JSONL storage, Bun runtime. Replaces beads in the overstory/mulch ecosystem.
 
 **The JSONL file IS the database.** No binary files, no export pipeline, no sync step. One file, diffable, mergeable.
 
@@ -9,7 +9,7 @@ Git-native issue tracker for AI agent workflows. Zero dependencies, JSONL storag
 - **Runtime:** Bun (runs TypeScript directly, no build step)
 - **Language:** TypeScript with strict mode (`noUncheckedIndexedAccess`, no `any`)
 - **Linting:** Biome (formatter + linter in one tool)
-- **Runtime dependencies:** Zero. Only Bun built-in APIs (`Bun.file`, `Bun.write`, `node:fs`, `node:crypto`)
+- **Runtime dependencies:** chalk, commander (plus Bun built-in APIs: `Bun.file`, `Bun.write`, `node:fs`, `node:crypto`)
 - **Dev dependencies:** `@types/bun`, `typescript`, `@biomejs/biome`
 - **Storage:** JSONL (git-native, diffable, mergeable)
 - **Config:** YAML (minimal built-in parser, ~50 LOC)
@@ -31,7 +31,7 @@ seeds/
   .github/
     workflows/
       ci.yml                  # lint + typecheck + test on push/PR
-      auto-tag.yml            # Auto-tag + GitHub release on version bump
+      publish.yml             # CI publish: auto-tag + GitHub release + npm publish
   scripts/
     version-bump.ts           # Bump version in package.json + src/index.ts
   src/
@@ -170,8 +170,8 @@ sd tpl status <id>                     Show convoy status
 
 ### Dependencies
 
-- **Zero runtime dependencies.** This is a hard rule.
-- Use only Bun built-in APIs: `Bun.file` for reads, `Bun.write` for writes, `node:fs` for locks, `node:crypto` for IDs
+- **Minimal runtime dependencies.** Only chalk (output formatting) and commander (CLI parsing).
+- Use Bun built-in APIs where possible: `Bun.file` for reads, `Bun.write` for writes, `node:fs` for locks, `node:crypto` for IDs
 - Dev dependencies are limited to types and tooling
 
 ### Concurrency

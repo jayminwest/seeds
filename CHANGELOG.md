@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-24
+
+### Changed
+- Migrated CLI parsing from manual switch/case to Commander.js — proper subcommands, built-in help, and option validation
+- Replaced manual ANSI escape codes with chalk for output formatting
+- Use `process.exitCode = 1` instead of `process.exit(1)` for graceful shutdown
+- Replaced auto-tag workflow with unified publish workflow for npm
+
+### Fixed
+- `--desc` flag silently dropped descriptions in `create` and `update` commands
+
+### Added
+- chalk and commander as runtime dependencies
+- `--desc` as explicit alias for `--description` in `create` and `update`
+
+### Removed
+- `.beads/` directory — seeds is now the sole issue tracker
+- Manual ANSI color helpers (`c.red`, `c.green`, etc.) in `output.ts`
+
 ## [0.2.0] - 2026-02-23
 
 ### Added
@@ -33,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jayminwest/seeds/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jayminwest/seeds/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jayminwest/seeds/releases/tag/v0.1.0

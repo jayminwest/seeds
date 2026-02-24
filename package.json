@@ -1,6 +1,6 @@
 {
 	"name": "@os-eco/seeds-cli",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Git-native issue tracker for AI agent workflows",
 	"type": "module",
 	"bin": {

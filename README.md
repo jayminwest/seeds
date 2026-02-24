@@ -1,6 +1,6 @@
 # Seeds
 
-Git-native issue tracker for AI agent workflows. Zero dependencies, JSONL storage, Bun runtime.
+Git-native issue tracker for AI agent workflows. Minimal dependencies, JSONL storage, Bun runtime.
 
 Replaces [beads](https://github.com/steveyegge/beads) in the [overstory](https://github.com/jayminwest/overstory)/[mulch](https://github.com/jayminwest/mulch) ecosystem. No Dolt, no daemon, no binary DB files. **The JSONL file IS the database.**
 
@@ -13,7 +13,7 @@ Beads works but carries baggage overstory doesn't need:
 | Storage | 2.8MB binary `beads.db` (can't diff/merge) | JSONL (diffable, mergeable) |
 | Sync | 286 export-state tracking files | No sync — file IS the DB |
 | Concurrency | `beads.db` lock contention | Advisory locks + atomic writes |
-| Dependencies | Dolt embedded | Zero runtime deps |
+| Dependencies | Dolt embedded | chalk + commander |
 
 ## Installation
 
@@ -219,7 +219,7 @@ Updates both `package.json` and `src/index.ts` atomically.
 | Locking | Advisory file locks |
 | Formatting | Biome (tabs, 100 char width) |
 | Testing | `bun test` with real I/O, temp dirs |
-| Dependencies | Zero runtime |
+| Dependencies | chalk, commander (minimal) |
 
 ## License
 
