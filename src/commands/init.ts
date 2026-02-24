@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Command } from "commander";
 import { outputJson, printSuccess } from "../output.ts";
 import { CONFIG_FILE, ISSUES_FILE, SEEDS_DIR_NAME, TEMPLATES_FILE } from "../types.ts";
@@ -20,8 +20,9 @@ export async function run(args: string[]): Promise<void> {
 
 	mkdirSync(seedsDir, { recursive: true });
 
-	// config.yaml
-	writeFileSync(join(seedsDir, CONFIG_FILE), 'project: "seeds"\nversion: "1"\n');
+	// config.yaml — derive project name from directory
+	const projectName = basename(cwd);
+	writeFileSync(join(seedsDir, CONFIG_FILE), `project: "${projectName}"\nversion: "1"\n`);
 
 	// empty JSONL files
 	writeFileSync(join(seedsDir, ISSUES_FILE), "");

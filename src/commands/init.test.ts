@@ -39,10 +39,11 @@ describe("sd init", () => {
 		expect(stat).toBe(true);
 	});
 
-	test("creates config.yaml with project name", async () => {
+	test("creates config.yaml with project name derived from directory", async () => {
 		await run(["init"], tmpDir);
 		const config = await Bun.file(join(tmpDir, ".seeds", "config.yaml")).text();
-		expect(config).toContain("project:");
+		const dirName = tmpDir.split("/").pop()!;
+		expect(config).toContain(`project: "${dirName}"`);
 		expect(config).toContain("version:");
 	});
 
