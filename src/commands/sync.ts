@@ -16,6 +16,7 @@ function spawnSync(
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const statusOnly = args.includes("--status");
+	const dryRun = args.includes("--dry-run");
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const projectRoot = projectRootFromSeedsDir(dir);
@@ -55,6 +56,26 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		return;
 	}
 
+	if (dryRun) {
+		const date = new Date().toISOString().slice(0, 10);
+		const msg = `seeds: sync ${date}`;
+		if (jsonMode) {
+			outputJson({
+				success: true,
+				command: "sync",
+				dryRun: true,
+				wouldCommit: true,
+				message: msg,
+				changes: changed,
+			});
+		} else {
+			console.log("Dry run — would commit:");
+			console.log(changed);
+			console.log(`Commit message: ${msg}`);
+		}
+		return;
+	}
+
 	// Stage
 	const addResult = spawnSync(["git", "-C", projectRoot, "add", `${SEEDS_DIR_NAME}/`], projectRoot);
 	if (addResult.exitCode !== 0) {
@@ -81,10 +102,12 @@ export function register(program: Command): void {
 		.command("sync")
 		.description("Stage and commit .seeds/ changes")
 		.option("--status", "Check status without committing")
+		.option("--dry-run", "Show what would be committed without committing")
 		.option("--json", "Output as JSON")
-		.action(async (opts: { status?: boolean; json?: boolean }) => {
+		.action(async (opts: { status?: boolean; dryRun?: boolean; json?: boolean }) => {
 			const args: string[] = [];
 			if (opts.status) args.push("--status");
+			if (opts.dryRun) args.push("--dry-run");
 			if (opts.json) args.push("--json");
 			await run(args);
 		});

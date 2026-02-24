@@ -3,13 +3,31 @@ export const VERSION = "0.2.1";
 
 import chalk from "chalk";
 import { Command } from "commander";
+import { setQuiet } from "./output.ts";
+
+// Handle --version --json before Commander processes the flag
+const rawArgs = process.argv.slice(2);
+if ((rawArgs.includes("-v") || rawArgs.includes("--version")) && rawArgs.includes("--json")) {
+	const platform = `${process.platform}-${process.arch}`;
+	console.log(
+		JSON.stringify({ name: "@os-eco/seeds-cli", version: VERSION, runtime: "bun", platform }),
+	);
+	process.exit();
+}
+
+// Apply quiet mode early so it affects all output during command execution
+if (rawArgs.includes("--quiet") || rawArgs.includes("-q")) {
+	setQuiet(true);
+}
 
 const program = new Command();
 
 program
 	.name("sd")
 	.description("seeds — git-native issue tracker")
-	.version(VERSION, "-V, --version");
+	.version(VERSION, "-v, --version", "Print version")
+	.option("-q, --quiet", "Suppress non-error output")
+	.option("--verbose", "Extra diagnostic output");
 
 // Lazy-load and register all commands
 async function registerAll(): Promise<void> {
@@ -30,6 +48,7 @@ async function registerAll(): Promise<void> {
 		import("./commands/migrate.ts"),
 		import("./commands/prime.ts"),
 		import("./commands/onboard.ts"),
+		import("./commands/upgrade.ts"),
 	]);
 
 	for (const mod of mods) {

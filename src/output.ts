@@ -2,17 +2,19 @@ import chalk from "chalk";
 import type { Issue } from "./types.ts";
 import { PRIORITY_LABELS } from "./types.ts";
 
-// Forest palette
-export const brand = chalk.rgb(124, 179, 66);
-export const accent = chalk.rgb(255, 183, 77);
-export const muted = chalk.rgb(120, 120, 110);
+let _quiet = false;
+
+export function setQuiet(v: boolean): void {
+	_quiet = v;
+}
 
 export function outputJson(data: unknown): void {
 	console.log(JSON.stringify(data, null, 2));
 }
 
 export function printSuccess(msg: string): void {
-	console.log(`${brand("✓")} ${brand(msg)}`);
+	if (_quiet) return;
+	console.log(`${chalk.green("✔")} ${msg}`);
 }
 
 export function printError(msg: string): void {
@@ -24,7 +26,7 @@ export function printWarning(msg: string): void {
 }
 
 export function printIssueOneLine(issue: Issue): void {
-	const isBlocked = (issue.blockedBy?.length ?? 0) > 0;
+	if (_quiet) return;
 	const statusIcon =
 		issue.status === "closed"
 			? muted("x")
@@ -42,6 +44,7 @@ export function printIssueOneLine(issue: Issue): void {
 }
 
 export function printIssueFull(issue: Issue): void {
+	if (_quiet) return;
 	const statusColor =
 		issue.status === "closed" ? muted : issue.status === "in_progress" ? chalk.cyan : brand;
 	const priorityLabel = PRIORITY_LABELS[issue.priority] ?? String(issue.priority);
