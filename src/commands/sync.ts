@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
-import { outputJson } from "../output.ts";
+import { findSeedsDir, isInsideWorktree, projectRootFromSeedsDir } from "../config.ts";
+import { outputJson, printWarning } from "../output.ts";
 import { SEEDS_DIR_NAME } from "../types.ts";
 
 function spawnSync(
@@ -20,6 +20,23 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const projectRoot = projectRootFromSeedsDir(dir);
+
+	// Worktree guard: skip commit when running from a worktree
+	if (!seedsDir && isInsideWorktree(process.cwd())) {
+		const msg = "Inside a git worktree — skipping commit. Issues are stored in the main repo.";
+		if (jsonMode) {
+			outputJson({
+				success: true,
+				command: "sync",
+				committed: false,
+				worktree: true,
+				message: msg,
+			});
+		} else {
+			printWarning(msg);
+		}
+		return;
+	}
 
 	const statusResult = spawnSync(
 		["git", "-C", projectRoot, "status", "--porcelain", `${SEEDS_DIR_NAME}/`],

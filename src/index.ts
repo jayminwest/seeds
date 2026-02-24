@@ -2,8 +2,8 @@
 export const VERSION = "0.2.2";
 
 import chalk from "chalk";
-import { Command } from "commander";
-import { setQuiet } from "./output.ts";
+import { Command, Help } from "commander";
+import { brand, muted, setQuiet } from "./output.ts";
 
 // Handle --version --json before Commander processes the flag
 const rawArgs = process.argv.slice(2);
@@ -27,7 +27,45 @@ program
 	.description("seeds — git-native issue tracker")
 	.version(VERSION, "-v, --version", "Print version")
 	.option("-q, --quiet", "Suppress non-error output")
-	.option("--verbose", "Extra diagnostic output");
+	.option("--verbose", "Extra diagnostic output")
+	.addHelpCommand(false)
+	.configureHelp({
+		formatHelp(cmd: Command, helper: Help): string {
+			if (cmd.parent) {
+				return Help.prototype.formatHelp.call(helper, cmd, helper);
+			}
+			const header = `${brand(chalk.bold("seeds"))} ${muted(`v${VERSION}`)} — Git-native issue tracking\n\nUsage: sd <command> [options]`;
+
+			const cmdLines: string[] = ["\nCommands:"];
+			for (const sub of cmd.commands) {
+				const name = sub.name();
+				const argStr = sub.registeredArguments
+					.map((a) => (a.required ? `<${a.name()}>` : `[${a.name()}]`))
+					.join(" ");
+				const rawEntry = argStr ? `${name} ${argStr}` : name;
+				const colored = argStr ? `${chalk.green(name)} ${chalk.dim(argStr)}` : chalk.green(name);
+				const pad = " ".repeat(Math.max(18 - rawEntry.length, 2));
+				cmdLines.push(`  ${colored}${pad}${sub.description()}`);
+			}
+
+			const opts: [string, string][] = [
+				["-h, --help", "Show help"],
+				["-v, --version", "Print version"],
+				["--json", "Output as JSON"],
+				["-q, --quiet", "Suppress non-error output"],
+				["--verbose", "Extra diagnostic output"],
+			];
+			const optLines: string[] = ["\nOptions:"];
+			for (const [flag, desc] of opts) {
+				const pad = " ".repeat(Math.max(18 - flag.length, 2));
+				optLines.push(`  ${chalk.dim(flag)}${pad}${desc}`);
+			}
+
+			const footer = `\nRun '${chalk.dim("sd")} <command> --help' for command-specific help.`;
+
+			return `${[header, ...cmdLines, ...optLines, footer].join("\n")}\n`;
+		},
+	});
 
 // Lazy-load and register all commands
 async function registerAll(): Promise<void> {

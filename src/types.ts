@@ -46,8 +46,8 @@ export const ISSUES_FILE = "issues.jsonl";
 export const TEMPLATES_FILE = "templates.jsonl";
 export const CONFIG_FILE = "config.yaml";
 export const LOCK_STALE_MS = 30_000;
-export const LOCK_RETRY_MS = 50;
-export const LOCK_TIMEOUT_MS = 5_000;
+export const LOCK_RETRY_MS = 100;
+export const LOCK_TIMEOUT_MS = 30_000;
 
 export const VALID_TYPES = ["task", "bug", "feature", "epic"] as const;
 export const VALID_STATUSES = ["open", "in_progress", "closed"] as const;

@@ -38,7 +38,7 @@ async function acquireLock(dataFilePath: string): Promise<void> {
 			if (Date.now() - start > LOCK_TIMEOUT_MS) {
 				throw new Error(`Timeout acquiring lock for ${dataFilePath}`);
 			}
-			await sleep(LOCK_RETRY_MS);
+			await sleep(LOCK_RETRY_MS + Math.floor(Math.random() * LOCK_RETRY_MS));
 		}
 	}
 }
