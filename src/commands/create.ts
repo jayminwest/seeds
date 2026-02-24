@@ -64,7 +64,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	const assignee = typeof flags.assignee === "string" ? flags.assignee : undefined;
-	const description = typeof flags.description === "string" ? flags.description : undefined;
+	const description =
+		typeof flags.description === "string"
+			? flags.description
+			: typeof flags.desc === "string"
+				? flags.desc
+				: undefined;
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const config = await readConfig(dir);

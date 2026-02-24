@@ -69,7 +69,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		if (typeof flags.title === "string") patch.title = flags.title;
 		if (typeof flags.assignee === "string") patch.assignee = flags.assignee;
-		if (typeof flags.description === "string") patch.description = flags.description;
+		const desc = typeof flags.description === "string" ? flags.description : flags.desc;
+		if (typeof desc === "string") patch.description = desc;
 		if (typeof flags.type === "string") {
 			const t = flags.type;
 			if (!(VALID_TYPES as readonly string[]).includes(t)) {
