@@ -1,10 +1,32 @@
 {
-	"name": "seeds",
+	"name": "@os-eco/seeds-cli",
 	"version": "0.2.0",
 	"description": "Git-native issue tracker for AI agent workflows",
 	"type": "module",
 	"bin": {
 		"sd": "./src/index.ts"
+	},
+	"main": "src/index.ts",
+	"files": ["src"],
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"bun": ">=1.0.0"
+	},
+	"keywords": [
+		"issue-tracking",
+		"git",
+		"ai",
+		"agents",
+		"cli",
+		"developer-tools"
+	],
+	"author": "Jaymin West",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jayminwest/seeds.git"
 	},
 	"scripts": {
 		"test": "bun test",

@@ -3,8 +3,18 @@
 
 project:
   name: seeds
-  root: /Users/jayminwest/Projects/seeds
+  root: /Users/jayminwest/Projects/os-eco/seeds
   canonicalBranch: main
+  qualityGates:
+    - name: Tests
+      command: bun test
+      description: all tests must pass
+    - name: Lint
+      command: bun run lint
+      description: zero errors
+    - name: Typecheck
+      command: bun run typecheck
+      description: no TypeScript errors
 agents:
   manifestPath: .overstory/agent-manifest.json
   baseDir: .overstory/agent-defs
@@ -14,7 +24,8 @@ agents:
   maxSessionsPerRun: 0
 worktrees:
   baseDir: .overstory/worktrees
-beads:
+taskTracker:
+  backend: auto
   enabled: true
 mulch:
   enabled: true
