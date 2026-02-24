@@ -22,5 +22,16 @@
 		"status": "completed",
 		"createdAt": "2026-02-24T03:43:49.697Z",
 		"completedAt": "2026-02-24T15:16:47.791Z"
+	},
+	{
+		"id": "group-3fdc28fc",
+		"name": "seeds-branding",
+		"memberIssueIds": [
+			"seeds-fc8b",
+			"seeds-58c5"
+		],
+		"status": "completed",
+		"createdAt": "2026-02-24T15:41:33.198Z",
+		"completedAt": "2026-02-24T16:10:37.766Z"
 	}
 ]
