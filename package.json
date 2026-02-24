@@ -14,14 +14,7 @@
 	"engines": {
 		"bun": ">=1.0.0"
 	},
-	"keywords": [
-		"issue-tracking",
-		"git",
-		"ai",
-		"agents",
-		"cli",
-		"developer-tools"
-	],
+	"keywords": ["issue-tracking", "git", "ai", "agents", "cli", "developer-tools"],
 	"author": "Jaymin West",
 	"license": "MIT",
 	"repository": {
