@@ -2,11 +2,18 @@ import chalk from "chalk";
 import type { Issue } from "./types.ts";
 import { PRIORITY_LABELS } from "./types.ts";
 
+let _quiet = false;
+
+export function setQuiet(v: boolean): void {
+	_quiet = v;
+}
+
 export function outputJson(data: unknown): void {
 	console.log(JSON.stringify(data, null, 2));
 }
 
 export function printSuccess(msg: string): void {
+	if (_quiet) return;
 	console.log(`${chalk.green("✔")} ${msg}`);
 }
 
@@ -15,6 +22,7 @@ export function printError(msg: string): void {
 }
 
 export function printIssueOneLine(issue: Issue): void {
+	if (_quiet) return;
 	const statusIcon =
 		issue.status === "closed"
 			? chalk.gray("●")
@@ -30,6 +38,7 @@ export function printIssueOneLine(issue: Issue): void {
 }
 
 export function printIssueFull(issue: Issue): void {
+	if (_quiet) return;
 	const statusColor =
 		issue.status === "closed"
 			? chalk.gray
