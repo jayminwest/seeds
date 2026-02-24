@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
-import { c, outputJson } from "../output.ts";
+import { outputJson } from "../output.ts";
 import { issuesPath, readIssues, templatesPath, writeIssues, writeTemplates } from "../store.ts";
 import type { Issue, Template } from "../types.ts";
 import {
@@ -601,14 +602,14 @@ function printCheck(check: DoctorCheck, verbose: boolean): void {
 
 	const icon =
 		check.status === "pass"
-			? `${c.green}✓${c.reset}`
+			? chalk.green("✓")
 			: check.status === "warn"
-				? `${c.yellow}⚠${c.reset}`
-				: `${c.red}✗${c.reset}`;
+				? chalk.yellow("⚠")
+				: chalk.red("✗");
 
 	console.log(`  ${icon} ${check.message}`);
 	for (const detail of check.details) {
-		console.log(`      ${c.dim}${detail}${c.reset}`);
+		console.log(`      ${chalk.dim(detail)}`);
 	}
 }
 
@@ -712,7 +713,7 @@ function reportResults(
 			...(fixedItems && fixedItems.length > 0 ? { fixed: fixedItems } : {}),
 		});
 	} else {
-		console.log(`\n${c.bold}Seeds Doctor${c.reset}\n`);
+		console.log(`\n${chalk.bold("Seeds Doctor")}\n`);
 		for (const check of checks) {
 			printCheck(check, verbose);
 		}
@@ -720,9 +721,9 @@ function reportResults(
 			`\n${String(summary.pass)} passed, ${String(summary.warn)} warning(s), ${String(summary.fail)} failure(s)`,
 		);
 		if (fixedItems && fixedItems.length > 0) {
-			console.log(`\n${c.bold}Fixed:${c.reset}`);
+			console.log(`\n${chalk.bold("Fixed:")}`);
 			for (const item of fixedItems) {
-				console.log(`  ${c.green}✓${c.reset} ${item}`);
+				console.log(`  ${chalk.green("✓")} ${item}`);
 			}
 		}
 	}
