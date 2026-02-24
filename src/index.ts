@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 export const VERSION = "0.2.0";
 
+import chalk from "chalk";
 import { Command } from "commander";
 
 const program = new Command();
@@ -49,7 +50,7 @@ main().catch((err: unknown) => {
 	if (jsonMode) {
 		console.log(JSON.stringify({ success: false, command: cmd, error: msg }));
 	} else {
-		console.error(`Error: ${msg}`);
+		console.error(chalk.red(`Error: ${msg}`));
 	}
-	process.exit(1);
+	process.exitCode = 1;
 });
