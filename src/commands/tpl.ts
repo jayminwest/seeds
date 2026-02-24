@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
-import { outputJson, printIssueOneLine, printSuccess } from "../output.ts";
+import { accent, muted, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
 import {
 	appendIssue,
 	appendTemplate,
@@ -130,9 +130,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				return;
 			}
 			for (const tpl of templates) {
-				console.log(
-					`${chalk.bold(tpl.id)}  ${tpl.name}  ${chalk.gray(`(${tpl.steps.length} steps)`)}`,
-				);
+				console.log(`${accent.bold(tpl.id)}  ${tpl.name}  ${muted(`(${tpl.steps.length} steps)`)}`);
 			}
 		}
 		return;
@@ -149,11 +147,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "tpl show", template: tpl });
 		} else {
-			console.log(`${chalk.bold(tpl.id)}  ${tpl.name}`);
-			console.log(`Steps (${tpl.steps.length}):`);
+			console.log(`${accent.bold(tpl.id)}  ${tpl.name}`);
+			console.log(muted(`Steps (${tpl.steps.length}):`));
 			tpl.steps.forEach((step, i) => {
 				console.log(
-					`  ${i + 1}. ${step.title}  ${chalk.gray(`[${step.type ?? "task"} P${step.priority ?? 2}]`)}`,
+					`  ${i + 1}. ${step.title}  ${muted(`[${step.type ?? "task"} P${step.priority ?? 2}]`)}`,
 				);
 			});
 		}
@@ -218,8 +216,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "tpl pour", ids: createdIds });
 		} else {
-			printSuccess(`Poured template ${templateId} — created ${createdIds.length} issues`);
-			for (const id of createdIds) console.log(`  ${id}`);
+			printSuccess(`Poured template ${accent(templateId)} — created ${createdIds.length} issues`);
+			for (const id of createdIds) console.log(`  ${accent(id)}`);
 		}
 		return;
 	}
@@ -261,12 +259,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "tpl status", status });
 		} else {
-			console.log(`${chalk.bold(`Convoy: ${templateId}`)}`);
-			console.log(`  Total:       ${status.total}`);
-			console.log(`  Completed:   ${completed}`);
-			console.log(`  In progress: ${inProgress}`);
-			console.log(`  Blocked:     ${blocked}`);
-			console.log("  Issues:");
+			console.log(`${chalk.bold("Convoy:")} ${accent(templateId)}`);
+			console.log(`  ${muted("Total:")}       ${status.total}`);
+			console.log(`  ${muted("Completed:")}   ${completed}`);
+			console.log(`  ${muted("In progress:")} ${inProgress}`);
+			console.log(`  ${muted("Blocked:")}     ${blocked}`);
+			console.log(muted("  Issues:"));
 			for (const issue of convoyIssues) {
 				process.stdout.write("    ");
 				printIssueOneLine(issue);

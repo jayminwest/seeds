@@ -1,7 +1,6 @@
-import chalk from "chalk";
 import { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { outputJson, printIssueOneLine } from "../output.ts";
+import { accent, muted, outputJson, printIssueOneLine } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 
@@ -27,33 +26,33 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			outputJson({ success: true, command: "dep list", issueId, blockedBy, blocks });
 		} else {
-			console.log(`${chalk.bold(issueId)} dependencies:`);
+			console.log(`${accent.bold(issueId)} ${muted("dependencies:")}`);
 			if (blockedBy.length > 0) {
-				console.log("  Blocked by:");
+				console.log(muted("  Blocked by:"));
 				for (const bid of blockedBy) {
 					const b = issues.find((i) => i.id === bid);
 					if (b) {
 						process.stdout.write("    ");
 						printIssueOneLine(b);
 					} else {
-						console.log(`    ${bid} (not found)`);
+						console.log(`    ${accent(bid)} ${muted("(not found)")}`);
 					}
 				}
 			}
 			if (blocks.length > 0) {
-				console.log("  Blocks:");
+				console.log(muted("  Blocks:"));
 				for (const bid of blocks) {
 					const b = issues.find((i) => i.id === bid);
 					if (b) {
 						process.stdout.write("    ");
 						printIssueOneLine(b);
 					} else {
-						console.log(`    ${bid} (not found)`);
+						console.log(`    ${accent(bid)} ${muted("(not found)")}`);
 					}
 				}
 			}
 			if (blockedBy.length === 0 && blocks.length === 0) {
-				console.log("  No dependencies.");
+				console.log(muted("  No dependencies."));
 			}
 		}
 		return;
@@ -101,7 +100,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			outputJson({ success: true, command: `dep ${subcmd}`, issueId, dependsOnId });
 		} else {
 			const verb = subcmd === "add" ? "Added" : "Removed";
-			console.log(`${verb} dependency: ${issueId} → ${dependsOnId}`);
+			console.log(`${verb} dependency: ${accent(issueId)} ${muted("→")} ${accent(dependsOnId)}`);
 		}
 		return;
 	}
