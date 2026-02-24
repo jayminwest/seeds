@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-export const VERSION = "0.2.2";
+export const VERSION = "0.2.3";
 
 import chalk from "chalk";
 import { Command, Help } from "commander";

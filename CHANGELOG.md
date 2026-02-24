@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-02-24
+
+### Added
+- Worktree root resolution — `findSeedsDir()` resolves to the main repo's `.seeds/` when running inside a git worktree
+- `isInsideWorktree()` helper in `config.ts` for worktree detection
+- Worktree guard in `sd sync` — skips commit with warning when running from a worktree (supports `--json`)
+- Tests for worktree resolution (`config.test.ts`) and sync worktree guard (`sync.test.ts`)
+- Custom branded help formatting for `sd --help` — colored commands, aligned options, branded header
+
+### Changed
+- Lock retry interval increased from 50ms to 100ms with random jitter to reduce contention
+- Lock timeout increased from 5s to 30s for better multi-agent reliability
+
 ## [0.2.2] - 2026-02-24
 
 ### Added
@@ -68,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/jayminwest/seeds/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/jayminwest/seeds/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jayminwest/seeds/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jayminwest/seeds/compare/v0.1.0...v0.2.0

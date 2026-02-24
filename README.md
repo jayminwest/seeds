@@ -178,7 +178,7 @@ Error:
 
 Seeds is safe for concurrent multi-agent use:
 
-- **Advisory file locks** — `O_CREAT | O_EXCL`, 30s stale threshold, 50ms retry, 5s timeout
+- **Advisory file locks** — `O_CREAT | O_EXCL`, 30s stale threshold, 100ms retry with jitter, 30s timeout
 - **Atomic writes** — temp file + rename under lock
 - **Dedup on read** — last occurrence wins after `merge=union` git merges
 
