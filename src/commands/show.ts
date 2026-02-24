@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printIssueFull } from "../output.ts";
 import { readIssues } from "../store.ts";
@@ -17,4 +18,16 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	} else {
 		printIssueFull(issue);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("show <id>")
+		.description("Show issue details")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, opts: { json?: boolean }) => {
+			const args: string[] = [id];
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

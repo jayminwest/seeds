@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
 import { SEEDS_DIR_NAME } from "../types.ts";
@@ -73,4 +74,18 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	} else {
 		console.log(`Committed: ${msg}`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("sync")
+		.description("Stage and commit .seeds/ changes")
+		.option("--status", "Check status without committing")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { status?: boolean; json?: boolean }) => {
+			const args: string[] = [];
+			if (opts.status) args.push("--status");
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

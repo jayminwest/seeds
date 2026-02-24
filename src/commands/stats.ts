@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { c, outputJson } from "../output.ts";
 import { readIssues } from "../store.ts";
@@ -55,4 +56,14 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			}
 		}
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("stats")
+		.description("Project statistics")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { json?: boolean }) => {
+			await run(opts.json ? ["--json"] : []);
+		});
 }

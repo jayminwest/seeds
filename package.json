@@ -31,5 +31,8 @@
 		"@biomejs/biome": "^1.9.0",
 		"@types/bun": "latest",
 		"typescript": "^5.0.0"
+	},
+	"dependencies": {
+		"commander": "^14.0.3"
 	}
 }

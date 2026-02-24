@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { hasMarkerSection, replaceMarkerSection, wrapInMarkers } from "../markers.ts";
 import { outputJson, printSuccess } from "../output.ts";
@@ -137,4 +138,20 @@ export async function run(args: string[]): Promise<void> {
 	} else {
 		printSuccess(`Added seeds section to ${filePath}`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("onboard")
+		.description("Add seeds section to CLAUDE.md / AGENTS.md")
+		.option("--stdout", "Print what would be written to stdout")
+		.option("--check", "Check status without modifying files")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { stdout?: boolean; check?: boolean; json?: boolean }) => {
+			const args: string[] = [];
+			if (opts.stdout) args.push("--stdout");
+			if (opts.check) args.push("--check");
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

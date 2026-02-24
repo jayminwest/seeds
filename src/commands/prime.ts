@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
 
@@ -143,4 +144,20 @@ export async function run(args: string[]): Promise<void> {
 	} else {
 		process.stdout.write(content);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("prime")
+		.description("Output AI agent context")
+		.option("--compact", "Condensed quick-reference output")
+		.option("--export", "Output the default template")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { compact?: boolean; export?: boolean; json?: boolean }) => {
+			const args: string[] = [];
+			if (opts.compact) args.push("--compact");
+			if (opts.export) args.push("--export");
+			if (opts.json) args.push("--json");
+			await run(args);
+		});
 }

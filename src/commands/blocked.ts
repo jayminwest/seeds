@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printIssueOneLine } from "../output.ts";
 import { readIssues } from "../store.ts";
@@ -28,4 +29,14 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		console.log(`\n${blocked.length} blocked issue(s)`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("blocked")
+		.description("Show all blocked issues")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { json?: boolean }) => {
+			await run(opts.json ? ["--json"] : []);
+		});
 }

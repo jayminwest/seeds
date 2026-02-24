@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
@@ -94,4 +95,44 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	} else {
 		printSuccess(`Updated ${id}`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("update <id>")
+		.description("Update issue fields")
+		.option("--status <status>", "New status (open|in_progress|closed)")
+		.option("--title <text>", "New title")
+		.option("--assignee <name>", "New assignee")
+		.option("--description <text>", "New description")
+		.option("--desc <text>", "New description (alias for --description)")
+		.option("--type <type>", "New type (task|bug|feature|epic)")
+		.option("--priority <n>", "New priority 0-4 or P0-P4")
+		.option("--json", "Output as JSON")
+		.action(
+			async (
+				id: string,
+				opts: {
+					status?: string;
+					title?: string;
+					assignee?: string;
+					description?: string;
+					desc?: string;
+					type?: string;
+					priority?: string;
+					json?: boolean;
+				},
+			) => {
+				const args: string[] = [id];
+				if (opts.status) args.push("--status", opts.status);
+				if (opts.title) args.push("--title", opts.title);
+				if (opts.assignee) args.push("--assignee", opts.assignee);
+				if (opts.description) args.push("--description", opts.description);
+				if (opts.desc) args.push("--desc", opts.desc);
+				if (opts.type) args.push("--type", opts.type);
+				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.json) args.push("--json");
+				await run(args);
+			},
+		);
 }

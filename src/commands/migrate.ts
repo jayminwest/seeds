@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
@@ -114,4 +115,14 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			console.log(`Skipped ${skipped.length} malformed issues.`);
 		}
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("migrate-from-beads")
+		.description("Migrate issues from beads issue tracker")
+		.option("--json", "Output as JSON")
+		.action(async (opts: { json?: boolean }) => {
+			await run(opts.json ? ["--json"] : []);
+		});
 }

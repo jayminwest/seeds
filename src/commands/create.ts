@@ -1,3 +1,4 @@
+import type { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
 import { outputJson, printSuccess } from "../output.ts";
@@ -100,4 +101,37 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	} else {
 		printSuccess(`Created ${createdId!}`);
 	}
+}
+
+export function register(program: Command): void {
+	program
+		.command("create")
+		.description("Create a new issue")
+		.requiredOption("--title <text>", "Issue title")
+		.option("--type <type>", "Issue type (task|bug|feature|epic)", "task")
+		.option("--priority <n>", "Priority 0-4 or P0-P4", "2")
+		.option("--assignee <name>", "Assignee name")
+		.option("--description <text>", "Issue description")
+		.option("--desc <text>", "Issue description (alias for --description)")
+		.option("--json", "Output as JSON")
+		.action(
+			async (opts: {
+				title: string;
+				type?: string;
+				priority?: string;
+				assignee?: string;
+				description?: string;
+				desc?: string;
+				json?: boolean;
+			}) => {
+				const args: string[] = ["--title", opts.title];
+				if (opts.type) args.push("--type", opts.type);
+				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.assignee) args.push("--assignee", opts.assignee);
+				if (opts.description) args.push("--description", opts.description);
+				if (opts.desc) args.push("--desc", opts.desc);
+				if (opts.json) args.push("--json");
+				await run(args);
+			},
+		);
 }
