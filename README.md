@@ -51,7 +51,7 @@ sd sync
 
 ## CLI Reference
 
-Every command supports `--json` for structured output. Global flags: `-v`/`--version`, `-q`/`--quiet`, `--verbose`. ANSI colors respect `NO_COLOR`.
+Every command supports `--json` for structured output. Global flags: `-v`/`--version`, `-q`/`--quiet`, `--verbose`, `--timing`. ANSI colors respect `NO_COLOR`.
 
 ### Issue Commands
 
@@ -118,6 +118,13 @@ sd doctor                              Check project health and data integrity
 sd prime                               Output AI agent context (PRIME.md or built-in)
   --compact            Condensed quick-reference output
 sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
+```
+
+### Shell Completions
+
+```
+sd completions <shell>                 Output shell completion script
+                                       Supported: bash, zsh, fish
 ```
 
 ### Self-Update

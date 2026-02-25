@@ -61,6 +61,7 @@ seeds/
       prime.ts                # sd prime
       onboard.ts              # sd onboard
       upgrade.ts              # sd upgrade
+      completions.ts          # sd completions
     markers.test.ts           # Marker section tests
     store.test.ts             # Core data layer tests
     id.test.ts                # ID generation tests
@@ -73,6 +74,9 @@ seeds/
       doctor.test.ts
       prime.test.ts
       onboard.test.ts
+      completions.test.ts
+    suggestions.test.ts       # Typo suggestion tests
+    timing.test.ts            # --timing flag tests
 ```
 
 ## Build & Test Commands
@@ -108,7 +112,7 @@ Git merge strategy: `merge=union` gitattribute on JSONL files. Dedup-on-read (la
 
 Binary name: `sd`
 
-Every command supports `--json` for structured output. Global flags: `-v`, `-q`/`--quiet`, `--verbose`.
+Every command supports `--json` for structured output. Global flags: `-v`, `-q`/`--quiet`, `--verbose`, `--timing`.
 
 ### Issue Commands
 
@@ -146,6 +150,7 @@ sd prime                               Output AI agent context
 sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
 sd upgrade                             Upgrade seeds to latest version from npm
   --check                              Check for updates without installing
+sd completions <shell>                 Output shell completion script (bash, zsh, fish)
 ```
 
 ### Template (Molecule) Commands

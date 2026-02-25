@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-02-25
+
+### Added
+- `sd completions <shell>` command — output shell completion scripts for bash, zsh, and fish
+- `--timing` global flag — show command execution time on stderr
+- Typo suggestion tests for misspelled command names
+- Tests for `--timing` flag and shell completions
+
+### Fixed
+- `sd init` now derives project name from directory name instead of hardcoding "seeds"
+
 ## [0.2.3] - 2026-02-24
 
 ### Added
@@ -81,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/jayminwest/seeds/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/jayminwest/seeds/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/jayminwest/seeds/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jayminwest/seeds/compare/v0.2.0...v0.2.1
