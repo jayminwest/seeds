@@ -28,6 +28,7 @@ program
 	.version(VERSION, "-v, --version", "Print version")
 	.option("-q, --quiet", "Suppress non-error output")
 	.option("--verbose", "Extra diagnostic output")
+	.option("--timing", "Show command execution time")
 	.addHelpCommand(false)
 	.configureHelp({
 		formatHelp(cmd: Command, helper: Help): string {
@@ -54,6 +55,7 @@ program
 				["--json", "Output as JSON"],
 				["-q, --quiet", "Suppress non-error output"],
 				["--verbose", "Extra diagnostic output"],
+				["--timing", "Show command execution time"],
 			];
 			const optLines: string[] = ["\nOptions:"];
 			for (const [flag, desc] of opts) {
@@ -66,6 +68,22 @@ program
 			return `${[header, ...cmdLines, ...optLines, footer].join("\n")}\n`;
 		},
 	});
+
+// --timing: measure command execution time
+let timingStart = 0;
+program.hook("preAction", () => {
+	if (program.opts().timing) {
+		timingStart = performance.now();
+	}
+});
+program.hook("postAction", () => {
+	if (program.opts().timing) {
+		const elapsed = performance.now() - timingStart;
+		const formatted =
+			elapsed < 1000 ? `${Math.round(elapsed)}ms` : `${(elapsed / 1000).toFixed(2)}s`;
+		process.stderr.write(`${muted(`⏱ ${formatted}`)}\n`);
+	}
+});
 
 // Lazy-load and register all commands
 async function registerAll(): Promise<void> {
@@ -87,6 +105,7 @@ async function registerAll(): Promise<void> {
 		import("./commands/prime.ts"),
 		import("./commands/onboard.ts"),
 		import("./commands/upgrade.ts"),
+		import("./commands/completions.ts"),
 	]);
 
 	for (const mod of mods) {
