@@ -28,6 +28,7 @@ This injects session context: rules, command reference, and workflows.
 - \`sd create --title "..." --type task --priority 2\` — Create issue
 - \`sd update <id> --status in_progress\` — Claim work
 - \`sd close <id>\` — Complete work
+- \`sd dep add <id> <depends-on>\` — Add dependency between issues
 - \`sd sync\` — Sync with git (run before pushing)
 
 ### Before You Finish
