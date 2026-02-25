@@ -1,34 +1,37 @@
 # Seeds
 
-[![CI](https://github.com/jayminwest/seeds/actions/workflows/ci.yml/badge.svg)](https://github.com/jayminwest/seeds/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@os-eco/seeds-cli)](https://www.npmjs.com/package/@os-eco/seeds-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+Git-native issue tracker for AI agent workflows.
 
-Git-native issue tracker for AI agent workflows. Minimal dependencies, JSONL storage, Bun runtime.
+[![npm](https://img.shields.io/npm/v/@os-eco/seeds-cli)](https://www.npmjs.com/package/@os-eco/seeds-cli)
+[![CI](https://github.com/jayminwest/seeds/actions/workflows/ci.yml/badge.svg)](https://github.com/jayminwest/seeds/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Replaces [beads](https://github.com/steveyegge/beads) in the [overstory](https://github.com/jayminwest/overstory)/[mulch](https://github.com/jayminwest/mulch) ecosystem. No Dolt, no daemon, no binary DB files. **The JSONL file IS the database.**
 
-## Why
+## Install
 
-Beads works but carries baggage overstory doesn't need:
+```bash
+bun install -g @os-eco/seeds-cli
+```
 
-| Problem | Beads | Seeds |
-|---------|-------|-------|
-| Storage | 2.8MB binary `beads.db` (can't diff/merge) | JSONL (diffable, mergeable) |
-| Sync | 286 export-state tracking files | No sync — file IS the DB |
-| Concurrency | `beads.db` lock contention | Advisory locks + atomic writes |
-| Dependencies | Dolt embedded | chalk + commander |
+Or try without installing:
 
-## Installation
+```bash
+npx @os-eco/seeds-cli --help
+```
+
+### Development
 
 ```bash
 git clone https://github.com/jayminwest/seeds
 cd seeds
 bun install
-bun link   # Makes 'sd' available globally
-```
+bun link              # Makes 'sd' available globally
 
-Requires [Bun](https://bun.sh) v1.0+.
+bun test              # Run all tests
+bun run lint          # Biome check
+bun run typecheck     # tsc --noEmit
+```
 
 ## Quick Start
 
@@ -53,96 +56,74 @@ sd close seeds-a1b2 --reason "Implemented with exponential backoff"
 sd sync
 ```
 
-## CLI Reference
+## Commands
 
 Every command supports `--json` for structured output. Global flags: `-v`/`--version`, `-q`/`--quiet`, `--verbose`, `--timing`. ANSI colors respect `NO_COLOR`.
 
 ### Issue Commands
 
-```
-sd init                                Initialize .seeds/ in current directory
+| Command | Description |
+|---------|-------------|
+| `sd init` | Initialize `.seeds/` in current directory |
+| `sd create --title <text>` | Create a new issue (`--type`, `--priority`, `--description`, `--assignee`) |
+| `sd show <id>` | Show issue details |
+| `sd list` | List issues with filters (`--status`, `--type`, `--assignee`, `--limit`) |
+| `sd ready` | Open issues with no unresolved blockers |
+| `sd update <id>` | Update issue fields (`--status`, `--title`, `--priority`, `--assignee`, `--description`) |
+| `sd close <id> [<id2> ...]` | Close one or more issues (`--reason`) |
+| `sd dep add <issue> <depends-on>` | Add dependency |
+| `sd dep remove <issue> <depends-on>` | Remove dependency |
+| `sd dep list <issue>` | Show deps for an issue |
+| `sd blocked` | Show all blocked issues |
+| `sd stats` | Project statistics |
+| `sd sync` | Stage and commit `.seeds/` changes (`--status`, `--dry-run`) |
 
-sd create                              Create a new issue
-  --title <text>       (required)
-  --type <type>        task|bug|feature|epic  (default: task)
-  --priority <n>       0-4 or P0-P4          (default: 2)
-  --description <text>
-  --assignee <name>
+### Template Commands
 
-sd show <id>                           Show issue details
+| Command | Description |
+|---------|-------------|
+| `sd tpl create --name <text>` | Create a template |
+| `sd tpl step add <id> --title <text>` | Add step (supports `{prefix}` interpolation) |
+| `sd tpl list` | List all templates |
+| `sd tpl show <id>` | Show template with steps |
+| `sd tpl pour <id> --prefix <text>` | Instantiate template into issues |
+| `sd tpl status <id>` | Show convoy completion status |
 
-sd list                                List issues with filters
-  --status <status>    open|in_progress|closed
-  --type <type>        task|bug|feature|epic
-  --assignee <name>
-  --limit <n>          Max results (default: 50)
+### Health
 
-sd ready                               Open issues with no unresolved blockers
-
-sd update <id>                         Update issue fields
-  --status --title --priority --assignee --description
-
-sd close <id> [<id2> ...]              Close one or more issues
-  --reason <text>      Closure summary
-
-sd dep add <issue> <depends-on>        Add dependency
-sd dep remove <issue> <depends-on>     Remove dependency
-sd dep list <issue>                    Show deps for an issue
-
-sd blocked                             Show all blocked issues
-
-sd stats                               Project statistics
-
-sd sync                                Stage and commit .seeds/ changes
-  --status             Check without committing
-  --dry-run            Show what would be committed without committing
-```
-
-### Template (Molecule) Commands
-
-```
-sd tpl create --name <text>            Create a template
-sd tpl step add <id> --title <text>    Add step (supports {prefix} interpolation)
-sd tpl list                            List all templates
-sd tpl show <id>                       Show template with steps
-sd tpl pour <id> --prefix <text>       Instantiate template into issues
-sd tpl status <id>                     Show convoy completion status
-```
-
-### Project Health
-
-```
-sd doctor                              Check project health and data integrity
-  --fix                Fix auto-fixable issues
-```
+| Command | Description |
+|---------|-------------|
+| `sd doctor` | Check project health and data integrity (`--fix`) |
 
 ### Agent Integration
 
-```
-sd prime                               Output AI agent context (PRIME.md or built-in)
-  --compact            Condensed quick-reference output
-sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
-```
+| Command | Description |
+|---------|-------------|
+| `sd prime` | Output AI agent context (`--compact`) |
+| `sd onboard` | Add seeds section to CLAUDE.md / AGENTS.md |
 
-### Shell Completions
+### Utility
 
-```
-sd completions <shell>                 Output shell completion script
-                                       Supported: bash, zsh, fish
-```
+| Command | Description |
+|---------|-------------|
+| `sd upgrade` | Upgrade seeds to latest version from npm (`--check`) |
+| `sd completions <shell>` | Output shell completion script (bash, zsh, fish) |
+| `sd migrate-from-beads` | Import `.beads/issues.jsonl` into `.seeds/` |
 
-### Self-Update
+## Architecture
 
-```
-sd upgrade                             Upgrade seeds to latest version from npm
-  --check              Check for updates without installing
-```
+Seeds stores all data in JSONL files inside a `.seeds/` directory — one JSON object per line, fully diffable and mergeable via git. Advisory file locks (`O_CREAT | O_EXCL`) and atomic writes (temp file + rename) ensure safe concurrent access from multiple agents. The `merge=union` gitattribute handles parallel branch merges; dedup-on-read (last occurrence wins) resolves any duplicates. See [CLAUDE.md](CLAUDE.md) for full technical details.
 
-### Migration
+## Why
 
-```bash
-sd migrate-from-beads    # Import .beads/issues.jsonl → .seeds/issues.jsonl
-```
+Beads works but carries baggage overstory doesn't need:
+
+| Problem | Beads | Seeds |
+|---------|-------|-------|
+| Storage | 2.8MB binary `beads.db` (can't diff/merge) | JSONL (diffable, mergeable) |
+| Sync | 286 export-state tracking files | No sync — file IS the DB |
+| Concurrency | `beads.db` lock contention | Advisory locks + atomic writes |
+| Dependencies | Dolt embedded | chalk + commander |
 
 ## Priority Scale
 
@@ -205,40 +186,20 @@ Overstory wraps `sd` via `Bun.spawn(["sd", ...])` with `--json` parsing, identic
 | `claim(id)` | `sd update <id> --status=in_progress --json` |
 | `close(id, reason)` | `sd close <id> --reason "..." --json` |
 
-## Development
+## Part of os-eco
 
-```bash
-bun test                      # Run all tests
-bun test src/store.test.ts    # Single test file
-bun run lint                  # Biome check
-bun run typecheck             # tsc --noEmit
+Seeds is part of the [os-eco](https://github.com/jayminwest/os-eco) AI agent tooling ecosystem.
 
-# Quality gates (run before committing)
-bun test && bun run lint && bun run typecheck
+```
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  overstory   orchestration
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  canopy      prompts
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  seeds       issues
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  mulch       expertise
 ```
 
-## Version Bump
+## Contributing
 
-```bash
-bun run version:bump patch    # 0.1.0 → 0.1.1
-bun run version:bump minor    # 0.1.0 → 0.2.0
-bun run version:bump major    # 0.1.0 → 1.0.0
-```
-
-Updates both `package.json` and `src/index.ts` atomically.
-
-## Tech Stack
-
-| Concern | Choice |
-|---------|--------|
-| Runtime | Bun (runs TS directly, no build) |
-| Language | TypeScript strict (`noUncheckedIndexedAccess`, no `any`) |
-| Storage | JSONL (git-native) |
-| Config | YAML (minimal built-in parser) |
-| Locking | Advisory file locks |
-| Formatting | Biome (tabs, 100 char width) |
-| Testing | `bun test` with real I/O, temp dirs |
-| Dependencies | chalk, commander (minimal) |
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
