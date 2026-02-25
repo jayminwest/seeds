@@ -17,6 +17,10 @@
 	"keywords": ["issue-tracking", "git", "ai", "agents", "cli", "developer-tools"],
 	"author": "Jaymin West",
 	"license": "MIT",
+	"homepage": "https://github.com/jayminwest/seeds",
+	"bugs": {
+		"url": "https://github.com/jayminwest/seeds/issues"
+	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jayminwest/seeds.git"
