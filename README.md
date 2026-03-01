@@ -186,6 +186,16 @@ Overstory wraps `sd` via `Bun.spawn(["sd", ...])` with `--json` parsing, identic
 | `claim(id)` | `sd update <id> --status=in_progress --json` |
 | `close(id, reason)` | `sd close <id> --reason "..." --json` |
 
+## Claude Code Plugin
+
+Seeds includes a [Claude Code plugin](claude-plugin/).
+
+```bash
+claude plugin install seeds@https://github.com/jayminwest/seeds
+```
+
+This provides the `/seeds:migrate-from-beads-to-seeds` command for automated migration from Beads to Seeds. See the [plugin README](claude-plugin/README.md) for details.
+
 ## Part of os-eco
 
 Seeds is part of the [os-eco](https://github.com/jayminwest/os-eco) AI agent tooling ecosystem.

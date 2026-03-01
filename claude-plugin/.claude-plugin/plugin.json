@@ -1,0 +1,8 @@
+{
+	"name": "seeds",
+	"description": "Claude Code plugin for Seeds git-native issue tracking",
+	"version": "0.1.0",
+	"author": {
+		"name": "jayminwest"
+	}
+}
