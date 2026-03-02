@@ -4,7 +4,16 @@ import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
-import type { Issue } from "../types.ts";
+import type { Issue, IssueComment } from "../types.ts";
+
+interface BeadsComment {
+	id?: number | string;
+	author?: string;
+	text?: string;
+	body?: string;
+	created_at?: string;
+	createdAt?: string;
+}
 
 interface BeadsIssue {
 	id?: string;
@@ -27,6 +36,7 @@ interface BeadsIssue {
 	updatedAt?: string;
 	closed_at?: string;
 	closedAt?: string;
+	comments?: BeadsComment[];
 }
 
 function mapStatus(s: string | undefined): Issue["status"] {
@@ -64,7 +74,93 @@ function mapBeadsIssue(b: BeadsIssue): Issue | null {
 	if (b.blocks?.length) issue.blocks = b.blocks;
 	const closedAt = b.closed_at ?? b.closedAt;
 	if (closedAt) issue.closedAt = closedAt;
+	if (b.comments?.length) {
+		const mapped: IssueComment[] = [];
+		for (const c of b.comments) {
+			const body = c.text ?? c.body;
+			if (!body) continue;
+			mapped.push({
+				id: `c-${String(c.id ?? mapped.length)}`,
+				author: c.author ?? "unknown",
+				body,
+				createdAt: c.created_at ?? c.createdAt ?? now,
+			});
+		}
+		if (mapped.length > 0) issue.comments = mapped;
+	}
 	return issue;
+}
+
+async function loadFromJsonl(beadsPath: string): Promise<BeadsIssue[]> {
+	const file = Bun.file(beadsPath);
+	const content = await file.text();
+	const lines = content.split("\n").filter((l) => l.trim());
+
+	const issues: BeadsIssue[] = [];
+	for (const line of lines) {
+		try {
+			issues.push(JSON.parse(line) as BeadsIssue);
+		} catch {
+			// skip malformed lines
+		}
+	}
+	return issues;
+}
+
+async function bdAvailable(): Promise<boolean> {
+	try {
+		const proc = Bun.spawn(["bd", "--version"], { stdout: "pipe", stderr: "pipe" });
+		await proc.exited;
+		return proc.exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
+async function loadFromDolt(projectRoot: string): Promise<BeadsIssue[]> {
+	// Get all issue IDs (open + closed)
+	const openProc = Bun.spawn(["bd", "list", "--json"], {
+		cwd: projectRoot,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const openOut = await new Response(openProc.stdout).text();
+	await openProc.exited;
+	if (openProc.exitCode !== 0) throw new Error("Failed to run 'bd list --json'");
+
+	const closedProc = Bun.spawn(["bd", "list", "--status", "closed", "--json"], {
+		cwd: projectRoot,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const closedOut = await new Response(closedProc.stdout).text();
+	await closedProc.exited;
+	if (closedProc.exitCode !== 0) throw new Error("Failed to run 'bd list --status closed --json'");
+
+	const openIssues = JSON.parse(openOut) as Array<{ id: string }>;
+	const closedIssues = JSON.parse(closedOut) as Array<{ id: string }>;
+	const allIds = [...openIssues.map((i) => i.id), ...closedIssues.map((i) => i.id)];
+
+	const issues: BeadsIssue[] = [];
+	for (const id of allIds) {
+		const proc = Bun.spawn(["bd", "show", id, "--json"], {
+			cwd: projectRoot,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const out = await new Response(proc.stdout).text();
+		await proc.exited;
+		if (proc.exitCode !== 0) continue;
+
+		try {
+			const data = JSON.parse(out) as BeadsIssue | BeadsIssue[];
+			const issue = Array.isArray(data) ? data[0] : data;
+			if (issue) issues.push(issue);
+		} catch {
+			// skip unparseable
+		}
+	}
+	return issues;
 }
 
 export async function run(args: string[], seedsDir?: string): Promise<void> {
@@ -72,22 +168,22 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const dir = seedsDir ?? (await findSeedsDir());
 	const projectRoot = projectRootFromSeedsDir(dir);
 
+	let beadsIssues: BeadsIssue[];
+	let source: string;
+
 	const beadsPath = join(projectRoot, ".beads", "issues.jsonl");
-	if (!existsSync(beadsPath)) {
-		throw new Error(`Beads issues not found at: ${beadsPath}`);
-	}
-
-	const file = Bun.file(beadsPath);
-	const content = await file.text();
-	const lines = content.split("\n").filter((l) => l.trim());
-
-	const beadsIssues: BeadsIssue[] = [];
-	for (const line of lines) {
-		try {
-			beadsIssues.push(JSON.parse(line) as BeadsIssue);
-		} catch {
-			// skip malformed lines
-		}
+	if (existsSync(beadsPath)) {
+		// Legacy beads: JSONL file exists
+		beadsIssues = await loadFromJsonl(beadsPath);
+		source = "jsonl";
+	} else if (existsSync(join(projectRoot, ".beads")) && (await bdAvailable())) {
+		// Modern beads (Dolt): .beads/ directory exists but no JSONL, use bd CLI
+		beadsIssues = await loadFromDolt(projectRoot);
+		source = "dolt";
+	} else {
+		throw new Error(
+			"No beads data found. Expected .beads/issues.jsonl (legacy) or .beads/ directory with 'bd' CLI available (Dolt).",
+		);
 	}
 
 	const mapped: Issue[] = [];
@@ -99,18 +195,28 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	let written = 0;
+	let commentCount = 0;
 	await withLock(issuesPath(dir), async () => {
 		const existing = await readIssues(dir);
 		const existingIds = new Set(existing.map((i) => i.id));
 		const newIssues = mapped.filter((i) => !existingIds.has(i.id));
 		await writeIssues(dir, [...existing, ...newIssues]);
 		written = newIssues.length;
+		commentCount = newIssues.reduce((sum, i) => sum + (i.comments?.length ?? 0), 0);
 	});
 
 	if (jsonMode) {
-		outputJson({ success: true, command: "migrate-from-beads", written, skipped: skipped.length });
+		outputJson({
+			success: true,
+			command: "migrate-from-beads",
+			written,
+			comments: commentCount,
+			skipped: skipped.length,
+			source,
+		});
 	} else {
-		console.log(`Migrated ${written} issues from beads.`);
+		const sourceLabel = source === "dolt" ? " (via bd CLI)" : " (from JSONL)";
+		console.log(`Migrated ${written} issues (${commentCount} comments) from beads${sourceLabel}.`);
 		if (skipped.length > 0) {
 			console.log(`Skipped ${skipped.length} malformed issues.`);
 		}
