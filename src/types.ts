@@ -3,7 +3,6 @@ export interface IssueComment {
 	author: string;
 	body: string;
 	createdAt: string;
-	updatedAt?: string;
 }
 
 export interface Issue {

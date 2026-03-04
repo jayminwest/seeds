@@ -5,43 +5,21 @@ import { accent, muted, outputJson, printSuccess } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { IssueComment } from "../types.ts";
 
-function parseArgs(args: string[]) {
-	const flags: Record<string, string | boolean> = {};
-	const positional: string[] = [];
-	let i = 0;
-	while (i < args.length) {
-		const arg = args[i];
-		if (!arg) {
-			i++;
-			continue;
-		}
-		if (arg.startsWith("--")) {
-			const key = arg.slice(2);
-			const eqIdx = key.indexOf("=");
-			if (eqIdx !== -1) {
-				flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
-				i++;
-			} else {
-				const next = args[i + 1];
-				if (next !== undefined && !next.startsWith("--")) {
-					flags[key] = next;
-					i += 2;
-				} else {
-					flags[key] = true;
-					i++;
-				}
-			}
-		} else {
-			positional.push(arg);
-			i++;
-		}
-	}
-	return { flags, positional };
-}
-
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
-	const { flags, positional } = parseArgs(args);
+	const quietMode = args.includes("--quiet") || args.includes("-q");
+	// Collect positional args by skipping flags and their values.
+	// Value flags: --author. Boolean flags: --json, --quiet, -q.
+	const VALUE_FLAGS = new Set(["--author"]);
+	const positional: string[] = [];
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i]!;
+		if (VALUE_FLAGS.has(a)) {
+			i++; // skip the flag's value
+		} else if (!a.startsWith("--") && a !== "-q") {
+			positional.push(a);
+		}
+	}
 	const subcmd = positional[0];
 
 	if (!subcmd) throw new Error("Usage: sd comment <add|list|delete> <issue-id> [...]");
@@ -55,8 +33,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (!issueId) throw new Error("Usage: sd comment add <issue-id> <body> --author <name>");
 		if (!body || !body.trim()) throw new Error("Comment body is required");
 
+		const authorFlagIdx = args.indexOf("--author");
 		const author =
-			typeof flags.author === "string" ? flags.author : (process.env.SEEDS_AUTHOR ?? "");
+			authorFlagIdx !== -1 && args[authorFlagIdx + 1]
+				? args[authorFlagIdx + 1]!
+				: (process.env.SEEDS_AUTHOR ?? "");
 		if (!author.trim()) {
 			throw new Error("--author is required (or set SEEDS_AUTHOR env var)");
 		}
@@ -109,7 +90,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				comments,
 				count: comments.length,
 			});
-		} else {
+		} else if (!quietMode) {
 			if (comments.length === 0) {
 				console.log("No comments.");
 				return;

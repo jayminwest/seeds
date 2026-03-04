@@ -93,6 +93,28 @@ describe("sd comment add", () => {
 		expect(exitCode).not.toBe(0);
 	});
 
+	test("--json flag before body does not consume body as its value", async () => {
+		// Regression: old parseArgs() treated --json as a value flag, so
+		// `sd comment add PROJ --json "body"` would consume "body" as --json's value
+		// and then fail because the body positional was missing.
+		// Pass --json before the body to exercise this ordering.
+		const { stdout, exitCode } = await run(
+			["comment", "add", issueId, "--json", "my comment body", "--author", "tester"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const result = JSON.parse(stdout) as { success: boolean; commentId: string };
+		expect(result.success).toBe(true);
+		// Verify the comment was stored with the correct body (not consumed by --json)
+		const list = await runJson<{
+			success: boolean;
+			comments: Array<{ id: string; body: string }>;
+			count: number;
+		}>(["comment", "list", issueId], tmpDir);
+		expect(list.count).toBe(1);
+		expect(list.comments[0]!.body).toBe("my comment body");
+	});
+
 	test("comment appears in issue show output", async () => {
 		await run(["comment", "add", issueId, "Visible comment", "--author", "tester"], tmpDir);
 		const show = await runJson<{
