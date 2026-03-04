@@ -137,9 +137,26 @@ async function loadFromDolt(projectRoot: string): Promise<BeadsIssue[]> {
 	await closedProc.exited;
 	if (closedProc.exitCode !== 0) throw new Error("Failed to run 'bd list --status closed --json'");
 
-	const openIssues = JSON.parse(openOut) as Array<{ id: string }>;
-	const closedIssues = JSON.parse(closedOut) as Array<{ id: string }>;
-	const allIds = [...openIssues.map((i) => i.id), ...closedIssues.map((i) => i.id)];
+	let openIssues: Array<{ id: string }>;
+	let closedIssues: Array<{ id: string }>;
+	try {
+		openIssues = JSON.parse(openOut) as Array<{ id: string }>;
+		closedIssues = JSON.parse(closedOut) as Array<{ id: string }>;
+	} catch {
+		throw new Error(
+			"Failed to parse bd list output. Is your bd CLI up to date?",
+		);
+	}
+
+	const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]*$/;
+	const allIds = [...openIssues.map((i) => i.id), ...closedIssues.map((i) => i.id)]
+		.filter((id) => {
+			if (!id || !ID_PATTERN.test(id)) {
+				console.warn(`Skipping issue with invalid ID: ${JSON.stringify(id)}`);
+				return false;
+			}
+			return true;
+		});
 
 	const issues: BeadsIssue[] = [];
 	for (const id of allIds) {
