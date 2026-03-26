@@ -16,10 +16,12 @@ interface TriageEntry {
 	score: number;
 }
 
-export async function run(args: string[], seedsDir?: string): Promise<void> {
-	const jsonMode = args.includes("--json");
-	const limitArg = args.indexOf("--limit");
-	const limit = limitArg !== -1 ? Number(args[limitArg + 1] ?? 0) : 0;
+export async function run(
+	opts: { json?: boolean; limit?: string },
+	seedsDir?: string,
+): Promise<void> {
+	const jsonMode = opts.json === true;
+	const limit = opts.limit !== undefined ? Number(opts.limit) : 0;
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const issues = await readIssues(dir);
@@ -59,7 +61,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	if (output.length === 0) {
-		console.log("No ready issues.");
+		console.log(muted("No ready issues."));
 		return;
 	}
 
@@ -83,9 +85,6 @@ export function register(program: Command): void {
 		.option("--json", "Output as JSON")
 		.option("--limit <n>", "Return top N issues only")
 		.action(async (opts: { json?: boolean; limit?: string }) => {
-			const args: string[] = [];
-			if (opts.json) args.push("--json");
-			if (opts.limit) args.push("--limit", opts.limit);
-			await run(args);
+			await run(opts);
 		});
 }

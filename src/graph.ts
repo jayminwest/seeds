@@ -169,7 +169,7 @@ function computeBetweenness(ids: string[], blocksMap: Map<string, string[]>): Ma
 function computeCriticalPath(ids: string[], blocksMap: Map<string, string[]>): Map<string, number> {
 	const memo = new Map<string, number>();
 
-	function dfs(id: string): number {
+	const dfs = (id: string): number => {
 		const cached = memo.get(id);
 		if (cached !== undefined) return cached;
 		const successors = blocksMap.get(id) ?? [];
@@ -180,7 +180,7 @@ function computeCriticalPath(ids: string[], blocksMap: Map<string, string[]>): M
 		const max = Math.max(...successors.map(dfs));
 		memo.set(id, max + 1);
 		return max + 1;
-	}
+	};
 
 	for (const id of ids) dfs(id);
 	return memo;
@@ -198,17 +198,17 @@ export function computeMetrics(issues: Issue[]): IssueMetrics {
 	const betweenness = computeBetweenness(ids, blocksMap);
 	const criticalPath = computeCriticalPath(ids, blocksMap);
 
-	const maxCp = Math.max(...Array.from(criticalPath.values()), 1);
+	const maxCp = Array.from(criticalPath.values()).reduce((a, b) => Math.max(a, b), 0) || 1;
 
 	// Normalize pagerank to [0,1]
 	const prValues = Array.from(pagerank.values());
-	const maxPr = Math.max(...prValues, Number.EPSILON);
+	const maxPr = prValues.reduce((a, b) => Math.max(a, b), 0) || 1;
 	const minPr = Math.min(...prValues);
 	const prRange = maxPr - minPr || 1;
 
 	// Normalize betweenness to [0,1] (already normalized by Brandes, but rescale to max)
 	const bValues = Array.from(betweenness.values());
-	const maxB = Math.max(...bValues, Number.EPSILON);
+	const maxB = bValues.reduce((a, b) => Math.max(a, b), 0) || 1;
 
 	const result: IssueMetrics = new Map();
 	for (const id of ids) {
