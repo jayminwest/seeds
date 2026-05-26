@@ -404,6 +404,27 @@ interface SubmittedStep {
 	labels?: string[];
 }
 
+// Additively merge per-step labels into an adopted seed's existing labels
+// (seeds-bac9 / pl-e5a8 step 3). Normalization mirrors `sd label add`
+// (lowercase, trim, drop empties); the result is deduped via Set. Returns the
+// merged array when it differs from `existing`, or `undefined` when there is
+// nothing to add. Adoption is link-only: we never remove labels the seed
+// already carries — manual user labels survive plan submits.
+function mergeAdoptedLabels(
+	existing: string[] | undefined,
+	stepLabels: string[] | undefined,
+): string[] | undefined {
+	if (!stepLabels || stepLabels.length === 0) return undefined;
+	const normalized = normalizeLabels(stepLabels);
+	if (normalized.length === 0) return undefined;
+	const current = existing ?? [];
+	const merged = Array.from(new Set([...current, ...normalized]));
+	if (merged.length === current.length && merged.every((l, i) => l === current[i])) {
+		return undefined;
+	}
+	return merged;
+}
+
 interface SubmittedPlan {
 	template: string;
 	name?: string;
@@ -641,6 +662,10 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 				if (adoption) {
 					const matched = allIssues[adoption.seedAllIdx];
 					if (!matched) continue;
+					// seeds-bac9 — additively merge step.labels into the adopted
+					// seed's existing labels (link-only path; user-added labels
+					// survive).
+					const mergedLabels = mergeAdoptedLabels(matched.labels, step.labels);
 					allIssues[adoption.seedAllIdx] = {
 						...matched,
 						plan_id: planId,
@@ -653,6 +678,7 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 							templateName,
 							approach: submitted.sections.approach,
 						}),
+						...(mergedLabels ? { labels: mergedLabels } : {}),
 						updatedAt: now,
 					};
 					continue;
@@ -1067,6 +1093,10 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 			const matchedIdx = allIssues.findIndex((iss) => iss.id === childId);
 			const matched = allIssues[matchedIdx];
 			if (matched) {
+				// seeds-bac9 — overwrite/revision path: additively merge
+				// step.labels into the matched child's labels. Never strips
+				// labels — manual edits and previously merged labels survive.
+				const mergedLabels = mergeAdoptedLabels(matched.labels, step.labels);
 				allIssues[matchedIdx] = {
 					...matched,
 					description: applyPlanBackref(matched.description, {
@@ -1077,6 +1107,7 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 						templateName,
 						approach,
 					}),
+					...(mergedLabels ? { labels: mergedLabels } : {}),
 					updatedAt: now,
 				};
 			}
@@ -1086,6 +1117,9 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 			const matchedIdx = allIssues.findIndex((iss) => iss.id === childId);
 			const matched = allIssues[matchedIdx];
 			if (matched) {
+				// seeds-bac9 — overwrite path external adoption: merge
+				// step.labels into the newly linked seed's existing labels.
+				const mergedLabels = mergeAdoptedLabels(matched.labels, step.labels);
 				allIssues[matchedIdx] = {
 					...matched,
 					plan_id: existingPlan.id,
@@ -1098,6 +1132,7 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 						templateName,
 						approach,
 					}),
+					...(mergedLabels ? { labels: mergedLabels } : {}),
 					updatedAt: now,
 				};
 			}
@@ -1761,10 +1796,22 @@ async function runAdopt(planIdArg: string, seedIds: string[], opts: AdoptOptions
 			const templateName = plan.template;
 			const approach = (plan.sections as { approach?: unknown }).approach;
 
+			// When the operator pins these adoptions to a specific blueprint
+			// step (--step <i>), pick up any labels declared on that step so
+			// post-submit adoption ends up label-equivalent to submit-time
+			// adoption (seeds-bac9 / pl-e5a8 step 3). No --step ⇒ no step ⇒
+			// no labels to merge.
+			let stepLabels: string[] | undefined;
+			if (stepIndex !== undefined) {
+				const blueprintSteps = (plan.sections as { steps?: SubmittedStep[] }).steps;
+				stepLabels = blueprintSteps?.[stepIndex]?.labels;
+			}
+
 			// Apply all link mutations under the lock.
 			for (const { idx } of resolved) {
 				const seed = allIssues[idx];
 				if (!seed) continue;
+				const mergedLabels = mergeAdoptedLabels(seed.labels, stepLabels);
 				const updated: Issue = {
 					...seed,
 					plan_id: planId,
@@ -1782,6 +1829,7 @@ async function runAdopt(planIdArg: string, seedIds: string[], opts: AdoptOptions
 				if (stepIndex !== undefined) {
 					updated.plan_step_index = stepIndex;
 				}
+				if (mergedLabels) updated.labels = mergedLabels;
 				allIssues[idx] = updated;
 			}
 
