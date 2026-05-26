@@ -4221,3 +4221,399 @@ describe("sd plan edit (seeds-64cf / pl-dee8 step 3): --step metadata", () => {
 		expect(steps[1]?.title).toBe("B in show");
 	});
 });
+
+describe("sd plan: step.labels (seeds-9f86 / pl-e5a8 step 4)", () => {
+	type IssueRow = {
+		id: string;
+		title: string;
+		status: string;
+		labels?: string[];
+		plan_id?: string;
+		plan_step_index?: number;
+		description?: string;
+	};
+
+	async function readIssueRows(): Promise<IssueRow[]> {
+		return readJsonl<IssueRow>(join(tmpDir, ".seeds/issues.jsonl"));
+	}
+
+	async function findIssue(id: string): Promise<IssueRow | undefined> {
+		return (await readIssueRows()).find((i) => i.id === id);
+	}
+
+	describe("STEP_SCHEMA validation", () => {
+		test("rejects an empty-string label", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{ title: "Step A", type: "task", priority: 2, blocks: [], labels: [""] },
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { stderr, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath],
+				tmpDir,
+			);
+			expect(exitCode).not.toBe(0);
+			expect(stderr.toLowerCase()).toContain("labels");
+		});
+
+		test("rejects a whitespace-only label (pattern requires non-whitespace)", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{ title: "Step A", type: "task", priority: 2, blocks: [], labels: ["   "] },
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { stderr, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath],
+				tmpDir,
+			);
+			expect(exitCode).not.toBe(0);
+			expect(stderr.toLowerCase()).toContain("labels");
+		});
+
+		test("rejects labels that is not an array", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				// biome-ignore lint/suspicious/noExplicitAny: intentionally invalid shape
+				{ title: "Step A", type: "task", priority: 2, blocks: [], labels: "nope" as any },
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { exitCode } = await run(["plan", "submit", seedId, "--plan", planPath], tmpDir);
+			expect(exitCode).not.toBe(0);
+		});
+
+		test("accepts an empty labels array (treated as no labels)", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{ title: "Step A", type: "task", priority: 2, blocks: [], labels: [] },
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { stdout, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath, "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const { children } = JSON.parse(stdout) as { children: string[] };
+			const child = await findIssue(children[0] ?? "");
+			expect(child?.labels).toBeUndefined();
+		});
+	});
+
+	describe("fresh-spawn path", () => {
+		test("applies step.labels to the spawned child seed", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{
+					title: "Step A",
+					type: "task",
+					priority: 2,
+					blocks: [],
+					labels: ["nightwatch", "debt"],
+				},
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { stdout, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath, "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const { children } = JSON.parse(stdout) as { children: string[] };
+			const childA = await findIssue(children[0] ?? "");
+			const childB = await findIssue(children[1] ?? "");
+			expect(childA?.labels).toEqual(["nightwatch", "debt"]);
+			// Sibling without step.labels has no labels field.
+			expect(childB?.labels).toBeUndefined();
+		});
+
+		test("normalizes (lowercase + trim) and dedups step.labels", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{
+					title: "Step A",
+					type: "task",
+					priority: 2,
+					blocks: [],
+					labels: ["Foo", "  FOO  ", "BAR", "bar"],
+				},
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { stdout, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath, "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const { children } = JSON.parse(stdout) as { children: string[] };
+			const child = await findIssue(children[0] ?? "");
+			expect(child?.labels).toEqual(["foo", "bar"]);
+		});
+
+		test("omits labels field entirely when step.labels is missing", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const planPath = await writePlanFile(tmpDir, validPlanFor());
+			const { stdout, exitCode } = await run(
+				["plan", "submit", seedId, "--plan", planPath, "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const { children } = JSON.parse(stdout) as { children: string[] };
+			for (const id of children) {
+				const child = await findIssue(id);
+				expect(child?.labels).toBeUndefined();
+			}
+		});
+	});
+
+	describe("submit-time adoption (existing_seed)", () => {
+		test("merges step.labels additively into adopted seed; manual labels survive", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const adoptee = await createSeed(tmpDir, "Pre-existing");
+			await run(["label", "add", adoptee, "manual"], tmpDir);
+
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{
+					title: "Pre-existing",
+					type: "task",
+					priority: 2,
+					blocks: [2],
+					existing_seed: adoptee,
+					labels: ["nightwatch"],
+				},
+				{ title: "Fresh", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			const { exitCode } = await run(
+				["plan", "submit", parent, "--plan", planPath, "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const adopt = await findIssue(adoptee);
+			// Additive: manual label preserved, step label appended (deduped).
+			expect(adopt?.labels).toEqual(["manual", "nightwatch"]);
+		});
+
+		test("adoption without step.labels leaves existing labels untouched", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const adoptee = await createSeed(tmpDir, "Pre-existing");
+			await run(["label", "add", adoptee, "manual"], tmpDir);
+
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{
+					title: "Pre-existing",
+					type: "task",
+					priority: 2,
+					blocks: [2],
+					existing_seed: adoptee,
+				},
+				{ title: "Fresh", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			await run(["plan", "submit", parent, "--plan", planPath, "--json"], tmpDir);
+			const adopt = await findIssue(adoptee);
+			expect(adopt?.labels).toEqual(["manual"]);
+		});
+
+		test("adoption with already-present step.label does not duplicate", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const adoptee = await createSeed(tmpDir, "Pre-existing");
+			await run(["label", "add", adoptee, "nightwatch"], tmpDir);
+
+			const plan = validPlanFor();
+			plan.sections.steps = [
+				{
+					title: "Pre-existing",
+					type: "task",
+					priority: 2,
+					blocks: [2],
+					existing_seed: adoptee,
+					labels: ["NIGHTWATCH"],
+				},
+				{ title: "Fresh", type: "task", priority: 2, blocks: [] },
+			];
+			const planPath = await writePlanFile(tmpDir, plan);
+			await run(["plan", "submit", parent, "--plan", planPath, "--json"], tmpDir);
+			const adopt = await findIssue(adoptee);
+			expect(adopt?.labels).toEqual(["nightwatch"]);
+		});
+	});
+
+	describe("--overwrite path", () => {
+		test("merges step.labels into matched child additively; preserves manual labels", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const planPath = await writePlanFile(tmpDir, validPlanFor());
+			const first = await run(["plan", "submit", seedId, "--plan", planPath, "--json"], tmpDir);
+			const firstChildren = (JSON.parse(first.stdout) as { children: string[] }).children;
+			const childId = firstChildren[0] ?? "";
+			await run(["label", "add", childId, "manual"], tmpDir);
+
+			const v2 = validPlanFor();
+			v2.sections.steps = [
+				{
+					title: "Step A",
+					type: "task",
+					priority: 2,
+					blocks: [2],
+					labels: ["nightwatch"],
+				},
+				{ title: "Step B", type: "task", priority: 2, blocks: [] },
+				{ title: "Step C", type: "task", priority: 2, blocks: [4] },
+				{ title: "Step D", type: "task", priority: 2, blocks: [] },
+			];
+			const v2Path = await writePlanFile(tmpDir, v2);
+			const { exitCode } = await run(
+				["plan", "submit", seedId, "--plan", v2Path, "--overwrite", "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const child = await findIssue(childId);
+			expect(child?.labels).toEqual(["manual", "nightwatch"]);
+		});
+
+		test("applies step.labels to newly spawned children on overwrite", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const planPath = await writePlanFile(tmpDir, validPlanFor());
+			await run(["plan", "submit", seedId, "--plan", planPath, "--json"], tmpDir);
+
+			const v2 = validPlanFor();
+			v2.sections.steps = [
+				{ title: "Step A", type: "task", priority: 2, blocks: [2] },
+				{ title: "Step B", type: "task", priority: 2, blocks: [3] },
+				{
+					title: "Brand New",
+					type: "task",
+					priority: 2,
+					blocks: [],
+					labels: ["bugwatch"],
+				},
+			];
+			const v2Path = await writePlanFile(tmpDir, v2);
+			const overwrite = await run(
+				["plan", "submit", seedId, "--plan", v2Path, "--overwrite", "--json"],
+				tmpDir,
+			);
+			const result = JSON.parse(overwrite.stdout) as { children: string[] };
+			const freshId = result.children[2] ?? "";
+			const fresh = await findIssue(freshId);
+			expect(fresh?.labels).toEqual(["bugwatch"]);
+		});
+
+		test("external adoption via overwrite merges step.labels additively", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const planPath = await writePlanFile(tmpDir, validPlanFor());
+			await run(["plan", "submit", seedId, "--plan", planPath, "--json"], tmpDir);
+
+			const external = await createSeed(tmpDir, "External");
+			await run(["label", "add", external, "manual"], tmpDir);
+
+			const v2 = validPlanFor();
+			v2.sections.steps = [
+				{ title: "Step A", type: "task", priority: 2, blocks: [2] },
+				{
+					title: "External",
+					type: "task",
+					priority: 2,
+					blocks: [],
+					existing_seed: external,
+					labels: ["bugwatch"],
+				},
+			];
+			const v2Path = await writePlanFile(tmpDir, v2);
+			const { exitCode } = await run(
+				["plan", "submit", seedId, "--plan", v2Path, "--overwrite", "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const adopt = await findIssue(external);
+			expect(adopt?.labels).toEqual(["manual", "bugwatch"]);
+		});
+
+		test("overwrite without step.labels does not strip existing labels", async () => {
+			const seedId = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			if (Array.isArray(plan.sections.steps)) {
+				const first = plan.sections.steps[0] as Record<string, unknown>;
+				first.labels = ["nightwatch"];
+			}
+			const planPath = await writePlanFile(tmpDir, plan);
+			const submit = await run(["plan", "submit", seedId, "--plan", planPath, "--json"], tmpDir);
+			const childId = (JSON.parse(submit.stdout) as { children: string[] }).children[0] ?? "";
+			expect((await findIssue(childId))?.labels).toEqual(["nightwatch"]);
+
+			// v2 drops the labels field; matched child must keep nightwatch.
+			const v2 = validPlanFor();
+			const v2Path = await writePlanFile(tmpDir, v2);
+			await run(["plan", "submit", seedId, "--plan", v2Path, "--overwrite", "--json"], tmpDir);
+			expect((await findIssue(childId))?.labels).toEqual(["nightwatch"]);
+		});
+	});
+
+	describe("runAdopt (post-submit `sd plan adopt`)", () => {
+		test("--step <i> pulls step.labels from the blueprint and merges additively", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			if (Array.isArray(plan.sections.steps)) {
+				const second = plan.sections.steps[1] as Record<string, unknown>;
+				second.labels = ["nightwatch"];
+			}
+			const planPath = await writePlanFile(tmpDir, plan);
+			const submit = await run(["plan", "submit", parent, "--plan", planPath, "--json"], tmpDir);
+			const planId = (JSON.parse(submit.stdout) as { plan_id: string }).plan_id;
+
+			const adoptee = await createSeed(tmpDir, "Late adoptee");
+			await run(["label", "add", adoptee, "manual"], tmpDir);
+
+			const { exitCode } = await run(
+				["plan", "adopt", planId, adoptee, "--step", "2", "--json"],
+				tmpDir,
+			);
+			expect(exitCode).toBe(0);
+			const adopt = await findIssue(adoptee);
+			expect(adopt?.labels).toEqual(["manual", "nightwatch"]);
+		});
+
+		test("--step <i> with a blueprint step that has no labels leaves existing labels untouched", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const planPath = await writePlanFile(tmpDir, validPlanFor());
+			const submit = await run(["plan", "submit", parent, "--plan", planPath, "--json"], tmpDir);
+			const planId = (JSON.parse(submit.stdout) as { plan_id: string }).plan_id;
+
+			const adoptee = await createSeed(tmpDir, "Late adoptee");
+			await run(["label", "add", adoptee, "manual"], tmpDir);
+
+			await run(["plan", "adopt", planId, adoptee, "--step", "1", "--json"], tmpDir);
+			const adopt = await findIssue(adoptee);
+			expect(adopt?.labels).toEqual(["manual"]);
+		});
+
+		test("adopt without --step does not pull labels from any blueprint step", async () => {
+			const parent = await createSeed(tmpDir, "Parent");
+			const plan = validPlanFor();
+			if (Array.isArray(plan.sections.steps)) {
+				const first = plan.sections.steps[0] as Record<string, unknown>;
+				first.labels = ["nightwatch"];
+			}
+			const planPath = await writePlanFile(tmpDir, plan);
+			const submit = await run(["plan", "submit", parent, "--plan", planPath, "--json"], tmpDir);
+			const planId = (JSON.parse(submit.stdout) as { plan_id: string }).plan_id;
+
+			const adoptee = await createSeed(tmpDir, "Late");
+			await run(["label", "add", adoptee, "manual"], tmpDir);
+
+			await run(["plan", "adopt", planId, adoptee, "--json"], tmpDir);
+			const adopt = await findIssue(adoptee);
+			expect(adopt?.labels).toEqual(["manual"]);
+		});
+	});
+});
