@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
+// sd completions tests intentionally run via subprocess: the generated
+// completion script enumerates the full top-level commander program, so we
+// need the real `bun run src/index.ts` entrypoint with every command
+// registered. Running through the in-process harness would only see the
+// single registered command and produce a stub script.
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
 async function run(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {

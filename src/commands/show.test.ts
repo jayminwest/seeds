@@ -2,24 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runCli } from "../test-harness.ts";
 
 let tmpDir: string;
-
-const CLI = join(import.meta.dir, "../../src/index.ts");
 
 async function run(
 	args: string[],
 	cwd: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
-		cwd,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
+	return runCli(args, cwd);
 }
 
 async function runJson<T = unknown>(args: string[], cwd: string): Promise<T> {
@@ -105,13 +96,7 @@ describe("sd show multiple ids", () => {
 
 	test("--json mixes valid + invalid into issues + errors, exits non-zero", async () => {
 		const a = await create("First", tmpDir);
-		const proc = Bun.spawn(["bun", "run", CLI, "show", a, "seeds-9999", "--json"], {
-			cwd: tmpDir,
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const stdout = await new Response(proc.stdout).text();
-		const exitCode = await proc.exited;
+		const { stdout, exitCode } = await run(["show", a, "seeds-9999", "--json"], tmpDir);
 		const out = JSON.parse(stdout) as {
 			success: boolean;
 			command: string;
@@ -160,13 +145,7 @@ describe("sd show multiple ids", () => {
 
 	test("plan id in multi-id mode is reported as a per-id error, others still render", async () => {
 		const a = await create("First", tmpDir);
-		const proc = Bun.spawn(["bun", "run", CLI, "show", a, "pl-deadbeef", "--json"], {
-			cwd: tmpDir,
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const stdout = await new Response(proc.stdout).text();
-		const exitCode = await proc.exited;
+		const { stdout, exitCode } = await run(["show", a, "pl-deadbeef", "--json"], tmpDir);
 		const out = JSON.parse(stdout) as {
 			success: boolean;
 			issues: Array<{ id: string }>;

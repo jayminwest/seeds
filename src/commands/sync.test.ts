@@ -77,6 +77,10 @@ describe("sync — worktree guard", () => {
 		const wtDir = join(tmpDir, "wt");
 		git(["worktree", "add", wtDir, "-b", "wt-branch"], mainRepo);
 
+		// Worktree-guard branch only fires when sync is invoked as the top-
+		// level CLI (no explicit seedsDir arg). The in-process harness passes
+		// a resolved seedsDir which bypasses the guard, so this test stays
+		// subprocess-based to exercise the real CLI codepath.
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "..", "index.ts"), "sync", "--json"],
 			{

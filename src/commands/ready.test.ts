@@ -2,19 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runCli } from "../test-harness.ts";
 
-const CLI = join(import.meta.dir, "../../src/index.ts");
 let tmpDir: string;
 
 async function run(
 	args: string[],
 	cwd: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
+	return runCli(args, cwd);
 }
 
 async function readyIds(cwd: string, extra: string[] = []): Promise<string[]> {
@@ -73,12 +69,7 @@ async function injectSubPlan(
 }
 
 async function createSeed(title: string, cwd: string, type = "task"): Promise<string> {
-	const proc = Bun.spawn(
-		["bun", "run", CLI, "create", "--title", title, "--type", type, "--json"],
-		{ cwd, stdout: "pipe", stderr: "pipe" },
-	);
-	const stdout = await new Response(proc.stdout).text();
-	await proc.exited;
+	const { stdout } = await run(["create", "--title", title, "--type", type, "--json"], cwd);
 	return (JSON.parse(stdout) as { id: string }).id;
 }
 

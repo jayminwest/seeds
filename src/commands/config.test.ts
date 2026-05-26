@@ -3,11 +3,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { configSchema } from "../config-schema.ts";
+import { runCli } from "../test-harness.ts";
 import { compileSchema } from "../validation.ts";
 
 let tmpDir: string;
-
-const CLI = join(import.meta.dir, "../../src/index.ts");
 
 interface ProcResult {
 	stdout: string;
@@ -16,11 +15,7 @@ interface ProcResult {
 }
 
 async function run(args: string[], cwd: string): Promise<ProcResult> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
+	return runCli(args, cwd);
 }
 
 async function runJson<T = unknown>(args: string[], cwd: string): Promise<T> {

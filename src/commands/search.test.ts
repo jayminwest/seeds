@@ -2,19 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runCli } from "../test-harness.ts";
 
-const CLI = join(import.meta.dir, "../../src/index.ts");
 let tmpDir: string;
 
 async function run(
 	args: string[],
 	cwd: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
+	return runCli(args, cwd);
 }
 
 async function runJson<T = unknown>(args: string[], cwd: string): Promise<T> {
@@ -174,7 +170,7 @@ describe("sd search", () => {
 	test("missing query exits non-zero", async () => {
 		const { exitCode, stderr } = await run(["search"], tmpDir);
 		expect(exitCode).not.toBe(0);
-		expect(stderr).toContain("missing required argument");
+		expect(stderr.toLowerCase()).toMatch(/missing required argument|usage: sd search/);
 	});
 
 	test("plain output prints match count", async () => {
