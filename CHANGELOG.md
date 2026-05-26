@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sd plan edit <id> --step <i> --title <text> | --priority <p> | --type <type>` in-place edits step metadata in `plan.sections.steps[i-1]` AND propagates the change to every child seed whose `plan_step_index === i-1`. Multiple step flags combine in one invocation; `--name` and `--section` still compose atomically with `--step`. Each invocation bumps `plan.revision` once. Out-of-range `--step` exits non-zero with both JSONL files untouched. Step priority accepts `0-4` or `P0-P4`; type is validated against `VALID_TYPES`. Lock order matches the rest of `sd plan edit`: outer `plans.jsonl`, inner `issues.jsonl` (mx-f29e43). Backref refresh (when `--section approach` also changes) and step propagation share a single issues lock so combined edits stay atomic. (seeds-64cf, plan pl-dee8 step 3)
+
 ## [0.4.7] - 2026-05-18
 
 ### Added

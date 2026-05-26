@@ -19,6 +19,7 @@ import {
 	writePlans,
 } from "../store.ts";
 import type { Issue, Plan, PlanStatus, PlanTemplate, SectionSpec } from "../types.ts";
+import { VALID_TYPES } from "../types.ts";
 
 export function register(program: Command): void {
 	const plan = new Command("plan").description("Plan management");
@@ -155,14 +156,35 @@ Plan name resolution:
 			"--section <name-and-text...>",
 			"Replace a text section: --section <name> <text> (V1: text sections only)",
 		)
+		.option("--step <i>", "1-based step index to edit (requires --title/--priority/--type)")
+		.option("--title <text>", "New title for the step (with --step); propagates to child seed")
+		.option("--priority <p>", "New priority (0-4 or P0-P4) for the step (with --step)")
+		.option("--type <type>", `New type for the step (with --step): ${VALID_TYPES.join("|")}`)
 		.option("--json", "Output as JSON")
-		.action(async (id: string, opts: { name?: string; section?: string[]; json?: boolean }) => {
-			await runEdit(id, {
-				name: opts.name,
-				section: opts.section,
-				jsonMode: Boolean(opts.json),
-			});
-		});
+		.action(
+			async (
+				id: string,
+				opts: {
+					name?: string;
+					section?: string[];
+					step?: string;
+					title?: string;
+					priority?: string;
+					type?: string;
+					json?: boolean;
+				},
+			) => {
+				await runEdit(id, {
+					name: opts.name,
+					section: opts.section,
+					step: opts.step,
+					stepTitle: opts.title,
+					stepPriority: opts.priority,
+					stepType: opts.type,
+					jsonMode: Boolean(opts.json),
+				});
+			},
+		);
 
 	plan
 		.command("adopt <plan-id> <seed-ids...>")
@@ -1994,7 +2016,71 @@ function countBlueprintSteps(plan: Plan): number {
 interface EditOptions {
 	name?: string;
 	section?: string[];
+	step?: string;
+	stepTitle?: string;
+	stepPriority?: string;
+	stepType?: string;
 	jsonMode: boolean;
+}
+
+// Parse `--priority` for step edits. Mirrors update.ts: accepts P0..P4 or 0..4.
+function parseStepPriority(raw: string): number {
+	const s = raw.trim();
+	const n = s.toUpperCase().startsWith("P")
+		? Number.parseInt(s.slice(1), 10)
+		: Number.parseInt(s, 10);
+	if (!Number.isInteger(n) || n < 0 || n > 4) {
+		throw new Error(`--priority must be 0-4 or P0-P4 (got: ${raw}).`);
+	}
+	return n;
+}
+
+interface StepPatch {
+	index: number; // 0-based
+	title?: string;
+	priority?: number;
+	type?: Issue["type"];
+}
+
+// Validate and parse the --step / --title / --priority / --type combination.
+// Returns undefined when --step is absent (and the title/priority/type flags
+// must also be absent in that case — they only make sense with --step).
+function parseStepPatch(opts: EditOptions): StepPatch | undefined {
+	const stepProvided = opts.step !== undefined;
+	const stepTitleProvided = opts.stepTitle !== undefined;
+	const stepPriorityProvided = opts.stepPriority !== undefined;
+	const stepTypeProvided = opts.stepType !== undefined;
+	const anyMetaProvided = stepTitleProvided || stepPriorityProvided || stepTypeProvided;
+	if (!stepProvided) {
+		if (anyMetaProvided) {
+			throw new Error("--title/--priority/--type require --step <i> (the step index to edit).");
+		}
+		return undefined;
+	}
+	const index = parseStepFlag(opts.step);
+	if (index === undefined) {
+		throw new Error("--step requires a value (1-based step index).");
+	}
+	if (!anyMetaProvided) {
+		throw new Error("--step requires at least one of --title, --priority, --type.");
+	}
+	const patch: StepPatch = { index };
+	if (stepTitleProvided) {
+		const t = (opts.stepTitle ?? "").trim();
+		if (t.length === 0) throw new Error("--title must be a non-empty string.");
+		patch.title = t;
+	}
+	if (stepPriorityProvided && opts.stepPriority !== undefined) {
+		patch.priority = parseStepPriority(opts.stepPriority);
+	}
+	if (stepTypeProvided && opts.stepType !== undefined) {
+		const t = opts.stepType;
+		if (!(VALID_TYPES as readonly string[]).includes(t)) {
+			throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
+		}
+		patch.type = t as Issue["type"];
+	}
+	return patch;
 }
 
 // Parse `--section <name> <text>` variadic capture into (name, text). The
@@ -2019,26 +2105,35 @@ function parseSectionFlag(raw: string[] | undefined): { name: string; text: stri
 	return { name, text: text ?? "" };
 }
 
-// sd plan edit <id> (pl-dee8). In-place plan field editing. V1 supports --name
-// and --section (text sections only); --step lands in seeds-64cf. Mutation
-// always bumps revision + updatedAt, even when no fields actually changed
-// from prior values — the revision bump is the contract, callers rely on it
-// for cache invalidation.
+// sd plan edit <id> (pl-dee8). In-place plan field editing. V1 supports --name,
+// --section (text sections only), and --step <i> --title/--priority/--type
+// (step metadata; propagates to the child seed at plan_step_index=i-1).
+// Mutation always bumps revision + updatedAt, even when no fields actually
+// changed from prior values — the revision bump is the contract, callers rely
+// on it for cache invalidation.
 //
 // Lock order: outer plans, inner issues (mx-f29e43). Issues lock is only
-// acquired when --section approach changes (children backref refresh).
+// acquired when --section approach changes (children backref refresh) or when
+// --step propagates title/priority/type to a child seed.
 async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 	const dir = await findSeedsDir();
 	const planId = await resolvePlanIdArg(idArg, dir);
 
 	const section = parseSectionFlag(opts.section);
+	const stepPatch = parseStepPatch(opts);
 
 	const editedFields: string[] = [];
 	if (opts.name !== undefined) editedFields.push("name");
 	if (section !== undefined) editedFields.push(`section:${section.name}`);
+	if (stepPatch !== undefined) {
+		const oneBased = stepPatch.index + 1;
+		if (stepPatch.title !== undefined) editedFields.push(`step:${oneBased}:title`);
+		if (stepPatch.priority !== undefined) editedFields.push(`step:${oneBased}:priority`);
+		if (stepPatch.type !== undefined) editedFields.push(`step:${oneBased}:type`);
+	}
 	if (editedFields.length === 0) {
 		throw new Error(
-			"No fields to edit. Pass at least one of: --name <text>, --section <name> <text>.",
+			"No fields to edit. Pass at least one of: --name <text>, --section <name> <text>, --step <i> --title/--priority/--type.",
 		);
 	}
 
@@ -2052,6 +2147,7 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 
 	let updatedPlan: Plan | null = null;
 	let approachChanged = false;
+	const propagatedChildren: string[] = [];
 	await withLock(plansPath(dir), async () => {
 		const plans = await readPlans(dir);
 		const idx = plans.findIndex((p) => p.id === planId);
@@ -2098,6 +2194,33 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 			}
 		}
 
+		if (stepPatch !== undefined) {
+			const rawSteps = (nextSections as { steps?: unknown }).steps;
+			if (!Array.isArray(rawSteps)) {
+				throw new Error(
+					`Plan ${planId} has no steps section to edit. Use 'sd plan submit --overwrite' to add steps.`,
+				);
+			}
+			const total = rawSteps.length;
+			if (stepPatch.index < 0 || stepPatch.index >= total) {
+				throw new Error(
+					`--step ${stepPatch.index + 1} is out of range (plan ${planId} has ${total} step${total === 1 ? "" : "s"}).`,
+				);
+			}
+			const existing = rawSteps[stepPatch.index];
+			const existingObj =
+				existing && typeof existing === "object" && !Array.isArray(existing)
+					? (existing as Record<string, unknown>)
+					: {};
+			const nextStep: Record<string, unknown> = { ...existingObj };
+			if (stepPatch.title !== undefined) nextStep.title = stepPatch.title;
+			if (stepPatch.priority !== undefined) nextStep.priority = stepPatch.priority;
+			if (stepPatch.type !== undefined) nextStep.type = stepPatch.type;
+			const nextSteps = rawSteps.slice();
+			nextSteps[stepPatch.index] = nextStep;
+			nextSections = { ...nextSections, steps: nextSteps };
+		}
+
 		const now = new Date().toISOString();
 		const next: Plan = {
 			...plan,
@@ -2110,36 +2233,57 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 		await writePlans(dir, plans);
 		updatedPlan = next;
 
-		// Refresh backref on every child seed when approach text changes. Plan
+		// Refresh backref on every child seed when approach text changes (plan
 		// children are ordered to align with sections.steps — children[i] is the
-		// seed for step i. Loose adoptions (no plan_step_index) get the
-		// stepIndex=undefined branch in applyPlanBackref.
-		if (approachChanged) {
+		// seed for step i; loose adoptions hit the stepIndex=undefined branch in
+		// applyPlanBackref) and/or propagate --step metadata to the child(ren)
+		// whose plan_step_index matches. Both happen under a single issues lock
+		// so combined edits remain atomic.
+		if (approachChanged || stepPatch !== undefined) {
 			await withLock(issuesPath(dir), async () => {
 				const allIssues = await readIssues(dir);
 				const parentIdx = allIssues.findIndex((iss) => iss.id === next.seed);
 				const parent = allIssues[parentIdx];
-				if (!parent) return;
 				const approach = (next.sections as { approach?: unknown }).approach;
 				let dirty = false;
-				for (const childId of next.children) {
-					const cIdx = allIssues.findIndex((iss) => iss.id === childId);
-					const child = allIssues[cIdx];
-					if (!child) continue;
-					const stepIndex = child.plan_step_index;
-					allIssues[cIdx] = {
-						...child,
-						description: applyPlanBackref(child.description, {
-							stepIndex,
-							planId: next.id,
-							parentSeedId: parent.id,
-							parentSeedTitle: parent.title,
-							templateName: next.template,
-							approach,
-						}),
-						updatedAt: now,
-					};
-					dirty = true;
+				if (approachChanged && parent) {
+					for (const childId of next.children) {
+						const cIdx = allIssues.findIndex((iss) => iss.id === childId);
+						const child = allIssues[cIdx];
+						if (!child) continue;
+						const stepIndex = child.plan_step_index;
+						allIssues[cIdx] = {
+							...child,
+							description: applyPlanBackref(child.description, {
+								stepIndex,
+								planId: next.id,
+								parentSeedId: parent.id,
+								parentSeedTitle: parent.title,
+								templateName: next.template,
+								approach,
+							}),
+							updatedAt: now,
+						};
+						dirty = true;
+					}
+				}
+				if (stepPatch !== undefined) {
+					// Match every child that carries plan_step_index === stepPatch.index.
+					// Multiple matches are legal (adoption via `sd plan adopt --step`
+					// stamps the same index on extra seeds); propagate to all of them.
+					for (let i = 0; i < allIssues.length; i++) {
+						const child = allIssues[i];
+						if (!child) continue;
+						if (!next.children.includes(child.id)) continue;
+						if (child.plan_step_index !== stepPatch.index) continue;
+						const updates: Partial<Issue> = { updatedAt: now };
+						if (stepPatch.title !== undefined) updates.title = stepPatch.title;
+						if (stepPatch.priority !== undefined) updates.priority = stepPatch.priority;
+						if (stepPatch.type !== undefined) updates.type = stepPatch.type;
+						allIssues[i] = { ...child, ...updates };
+						propagatedChildren.push(child.id);
+						dirty = true;
+					}
 				}
 				if (dirty) await writeIssues(dir, allIssues);
 			});
@@ -2158,6 +2302,7 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 			edited: editedFields,
 			name: finalPlan.name,
 			backrefs_refreshed: approachChanged ? finalPlan.children.length : 0,
+			propagated_children: propagatedChildren,
 		});
 		return;
 	}
@@ -2166,6 +2311,11 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 	);
 	if (approachChanged) {
 		printSuccess(`refreshed backrefs on ${finalPlan.children.length} child seed(s)`);
+	}
+	if (propagatedChildren.length > 0) {
+		printSuccess(
+			`propagated step metadata to ${propagatedChildren.length} child seed(s): ${propagatedChildren.join(", ")}`,
+		);
 	}
 }
 

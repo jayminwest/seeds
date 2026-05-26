@@ -3927,3 +3927,304 @@ describe("sd plan edit (seeds-21f2 / pl-dee8 step 2): --section", () => {
 		expect(parsed.plan.sections.approach).toBe(newApproach);
 	});
 });
+
+describe("sd plan edit (seeds-64cf / pl-dee8 step 3): --step metadata", () => {
+	async function submit(): Promise<{
+		seedId: string;
+		planId: string;
+		revision: number;
+		children: string[];
+	}> {
+		const seedId = await createSeed(tmpDir, "Step-editable seed");
+		const planPath = await writePlanFile(tmpDir, validPlanFor());
+		const { stdout, exitCode, stderr } = await run(
+			["plan", "submit", seedId, "--plan", planPath, "--json"],
+			tmpDir,
+		);
+		if (exitCode !== 0) throw new Error(`submit failed: ${stderr}`);
+		const parsed = JSON.parse(stdout) as {
+			plan_id: string;
+			revision: number;
+			children: string[];
+		};
+		return {
+			seedId,
+			planId: parsed.plan_id,
+			revision: parsed.revision,
+			children: parsed.children,
+		};
+	}
+
+	async function readPlanRow(planId: string): Promise<{
+		id: string;
+		revision: number;
+		updatedAt: string;
+		sections: { steps?: unknown[] } & Record<string, unknown>;
+		children: string[];
+	}> {
+		const plans = await readJsonl<{
+			id: string;
+			revision: number;
+			updatedAt: string;
+			sections: { steps?: unknown[] } & Record<string, unknown>;
+			children: string[];
+		}>(join(tmpDir, ".seeds/plans.jsonl"));
+		const found = plans.find((p) => p.id === planId);
+		if (!found) throw new Error(`plan not found: ${planId}`);
+		return found;
+	}
+
+	async function readIssueRow(id: string): Promise<{
+		id: string;
+		title: string;
+		type: string;
+		priority: number;
+		updatedAt: string;
+	}> {
+		const issues = await readJsonl<{
+			id: string;
+			title: string;
+			type: string;
+			priority: number;
+			updatedAt: string;
+		}>(join(tmpDir, ".seeds/issues.jsonl"));
+		for (let i = issues.length - 1; i >= 0; i--) {
+			const row = issues[i];
+			if (row && row.id === id) return row;
+		}
+		throw new Error(`issue not found: ${id}`);
+	}
+
+	test("--step --title renames the step and propagates to the child seed", async () => {
+		const { planId, revision, children } = await submit();
+		const child2 = children[1];
+		if (!child2) throw new Error("expected step-2 child");
+		const before = await readIssueRow(child2);
+		expect(before.title).toBe("Step B");
+
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--step", "2", "--title", "Renamed step B", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			revision: number;
+			propagated_children: string[];
+		};
+		expect(payload.edited).toEqual(["step:2:title"]);
+		expect(payload.revision).toBe(revision + 1);
+		expect(payload.propagated_children).toEqual([child2]);
+
+		const planRow = await readPlanRow(planId);
+		const steps = planRow.sections.steps;
+		if (!Array.isArray(steps)) throw new Error("steps missing");
+		expect((steps[1] as { title: string }).title).toBe("Renamed step B");
+
+		const after = await readIssueRow(child2);
+		expect(after.title).toBe("Renamed step B");
+	});
+
+	test("--step --priority propagates to the child seed", async () => {
+		const { planId, children } = await submit();
+		const child3 = children[2];
+		if (!child3) throw new Error("expected step-3 child");
+		const before = await readIssueRow(child3);
+		expect(before.priority).toBe(2);
+
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--step", "3", "--priority", "P0", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as { edited: string[]; propagated_children: string[] };
+		expect(payload.edited).toEqual(["step:3:priority"]);
+		expect(payload.propagated_children).toEqual([child3]);
+
+		const planRow = await readPlanRow(planId);
+		const steps = planRow.sections.steps as unknown[];
+		expect((steps[2] as { priority: number }).priority).toBe(0);
+		const after = await readIssueRow(child3);
+		expect(after.priority).toBe(0);
+	});
+
+	test("--step --type propagates to the child seed", async () => {
+		const { planId, children } = await submit();
+		const child1 = children[0];
+		if (!child1) throw new Error("expected step-1 child");
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--step", "1", "--type", "bug", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as { edited: string[]; propagated_children: string[] };
+		expect(payload.edited).toEqual(["step:1:type"]);
+		expect(payload.propagated_children).toEqual([child1]);
+
+		const planRow = await readPlanRow(planId);
+		const steps = planRow.sections.steps as unknown[];
+		expect((steps[0] as { type: string }).type).toBe("bug");
+		const after = await readIssueRow(child1);
+		expect(after.type).toBe("bug");
+	});
+
+	test("multiple --step flags apply atomically in one invocation", async () => {
+		const { planId, revision, children } = await submit();
+		const child4 = children[3];
+		if (!child4) throw new Error("expected step-4 child");
+		const { stdout, exitCode } = await run(
+			[
+				"plan",
+				"edit",
+				planId,
+				"--step",
+				"4",
+				"--title",
+				"D-prime",
+				"--priority",
+				"1",
+				"--type",
+				"feature",
+				"--json",
+			],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			revision: number;
+			propagated_children: string[];
+		};
+		expect(payload.edited).toEqual(["step:4:title", "step:4:priority", "step:4:type"]);
+		expect(payload.revision).toBe(revision + 1);
+		expect(payload.propagated_children).toEqual([child4]);
+
+		const after = await readIssueRow(child4);
+		expect(after.title).toBe("D-prime");
+		expect(after.priority).toBe(1);
+		expect(after.type).toBe("feature");
+	});
+
+	test("--name combines with --step in a single revision bump", async () => {
+		const { planId, revision, children } = await submit();
+		const child2 = children[1];
+		if (!child2) throw new Error("expected step-2 child");
+		const { stdout, exitCode } = await run(
+			[
+				"plan",
+				"edit",
+				planId,
+				"--name",
+				"Combined name+step",
+				"--step",
+				"2",
+				"--title",
+				"B via combo",
+				"--json",
+			],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			name?: string;
+			revision: number;
+			propagated_children: string[];
+		};
+		expect(payload.edited).toEqual(["name", "step:2:title"]);
+		expect(payload.name).toBe("Combined name+step");
+		expect(payload.revision).toBe(revision + 1);
+		expect(payload.propagated_children).toEqual([child2]);
+
+		const after = await readIssueRow(child2);
+		expect(after.title).toBe("B via combo");
+	});
+
+	test("out-of-range --step exits non-zero without mutation", async () => {
+		const { planId, children } = await submit();
+		const before = await readPlanRow(planId);
+		const child1 = children[0];
+		if (!child1) throw new Error("expected child");
+		const childBefore = await readIssueRow(child1);
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--step", "99", "--title", "nope"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("out of range");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+		const childAfter = await readIssueRow(child1);
+		expect(childAfter.updatedAt).toBe(childBefore.updatedAt);
+	});
+
+	test("--step 0 (non-positive) is rejected", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--step", "0", "--title", "x"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--step");
+	});
+
+	test("--step without --title/--priority/--type is rejected", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(["plan", "edit", planId, "--step", "1"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--title");
+	});
+
+	test("--title without --step is rejected", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--title", "orphan title"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--step");
+	});
+
+	test("--priority with invalid value is rejected", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--step", "1", "--priority", "9"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--priority");
+	});
+
+	test("--type with invalid value is rejected", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--step", "1", "--type", "saga"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--type");
+	});
+
+	test("--step does NOT refresh backrefs on non-matching children", async () => {
+		const { planId, children } = await submit();
+		const child1 = children[0];
+		const child3 = children[2];
+		if (!child1 || !child3) throw new Error("expected children");
+		const beforeOther = await readIssueRow(child3);
+		await run(["plan", "edit", planId, "--step", "1", "--title", "renamed A", "--json"], tmpDir);
+		const afterOther = await readIssueRow(child3);
+		// Step 3's child should not be touched (different plan_step_index).
+		expect(afterOther.updatedAt).toBe(beforeOther.updatedAt);
+	});
+
+	test("plan show surfaces edited step title", async () => {
+		const { planId } = await submit();
+		await run(["plan", "edit", planId, "--step", "2", "--title", "B in show", "--json"], tmpDir);
+		const { stdout } = await run(["plan", "show", planId, "--json"], tmpDir);
+		const parsed = JSON.parse(stdout) as {
+			plan: { sections: { steps?: { title: string }[] } };
+		};
+		const steps = parsed.plan.sections.steps ?? [];
+		expect(steps[1]?.title).toBe("B in show");
+	});
+});
