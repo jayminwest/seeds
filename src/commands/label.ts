@@ -3,7 +3,10 @@ import { findSeedsDir } from "../config.ts";
 import { accent, muted, outputJson, printSuccess } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 
-function normalizeLabels(raw: string[]): string[] {
+// Exported so plan submit/adopt paths can reuse the same normalization
+// (lowercase, trim, drop empties) when applying step.labels to spawned/
+// adopted children (seeds-745e / seeds-bac9 under pl-e5a8).
+export function normalizeLabels(raw: string[]): string[] {
 	return raw.map((l) => l.trim().toLowerCase()).filter(Boolean);
 }
 

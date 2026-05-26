@@ -20,6 +20,7 @@ import {
 } from "../store.ts";
 import type { Issue, Plan, PlanStatus, PlanTemplate, SectionSpec } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
+import { normalizeLabels } from "./label.ts";
 
 export function register(program: Command): void {
 	const plan = new Command("plan").description("Plan management");
@@ -679,6 +680,14 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 					createdAt: now,
 					updatedAt: now,
 				};
+				// seeds-745e / pl-e5a8 step 2 — apply per-step labels to the
+				// freshly spawned child. Normalization mirrors `sd label add`
+				// (lowercase, trim, dedup); empty arrays after normalization
+				// are omitted so the on-disk Issue stays minimal.
+				if (step.labels && step.labels.length > 0) {
+					const normalized = Array.from(new Set(normalizeLabels(step.labels)));
+					if (normalized.length > 0) issue.labels = normalized;
+				}
 				// PLAN_SPEC.md:329-342 — when the parent step declares a
 				// plan_template, the child needs its own sub-plan first. Mark it
 				// requires_plan and leave plan_id unset so it does not back-link
@@ -1119,6 +1128,13 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 			issue.requires_plan = true;
 		} else {
 			issue.plan_id = existingPlan.id;
+		}
+		// seeds-745e / pl-e5a8 step 2 — apply per-step labels to the freshly
+		// spawned child on the overwrite/revision path. Same normalization as
+		// the initial-submit branch above.
+		if (step.labels && step.labels.length > 0) {
+			const normalized = Array.from(new Set(normalizeLabels(step.labels)));
+			if (normalized.length > 0) issue.labels = normalized;
 		}
 		// PLAN_SPEC.md:248-257 — forward semantics: step.blocks=[j] means
 		// this step blocks step j. Both directions are wired below in a
