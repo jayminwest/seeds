@@ -11,8 +11,9 @@ import { VERSION } from "../version.ts";
 // in a way agents should re-render. Independent of the package version so patch releases
 // don't mark every existing snippet as outdated. Bumped to 5 when the pi-aware variant
 // landed (seeds-89d2) — the `:pi` suffix on the schema marker doubles as install-state
-// detection so `sd onboard` after `sd setup pi` keeps the short pi variant.
-const ONBOARD_SCHEMA = 5;
+// detection so `sd onboard` after `sd setup pi` keeps the short pi variant. Bumped to
+// 6 when `sd plan edit` was added to the planning bullets (seeds-d457 / pl-dee8 step 4).
+const ONBOARD_SCHEMA = 6;
 
 // `@os-eco/seeds-cli` listed under `.pi/settings.json` → packages tells pi to
 // auto-load the extension on every session. Used by isPiInstalled() to pick the
@@ -61,6 +62,7 @@ Use \`sd plan\` when work is large or ambiguous enough that an LLM benefits from
 - \`sd plan prompt <seed-id>\` — Emit a structured prompt the LLM fills in
 - \`sd plan submit <seed-id> --plan <file>\` — Validate + spawn child seeds
 - \`sd plan show <pl-id>\` — View sections, children, sub-plans
+- \`sd plan edit <id> [--name | --section <name> <text> | --step <i> --title/--priority/--type]\` — In-place field edits; bumps revision
 - \`sd plan outcome <pl-id> --result success|partial|failure\` — Record outcome (storage-only)
 - \`sd plan review <pl-id> --by <name>\` — Record reviewer (informational)
 

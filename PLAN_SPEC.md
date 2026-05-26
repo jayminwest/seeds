@@ -163,6 +163,13 @@ sd plan adopt    <plan-id> <seed-id...> [--step <i>]   Adopt existing open seeds
 
 sd plan release  <plan-id> <seed-id...>                Detach seeds from a plan without closing them
                                                        (link-only; bumps revision).
+
+sd plan edit     <id>                                  Edit plan fields in place; bumps revision.
+  [--name <text>]                                      <id> accepts a plan id or seed id.
+  [--section <name> <text>]                            V1: text sections only. --section approach
+  [--step <i> --title/--priority/--type ...]           refreshes seeds:plan-backref on all children.
+                                                       --step is 1-based; metadata edits propagate to
+                                                       plan.children[i-1].
 ```
 
 `sd ready` is updated to surface plans-in-`draft` for the parent seeds it would otherwise return — planning is the highest-priority work when present.
@@ -486,6 +493,50 @@ Both `sd plan adopt` and `sd plan release` follow the global seeds convention: *
 - **Adopting an in-progress seed** is allowed and intentional. Adoption is link-only; an agent already working the seed keeps working it, now with the plan framing surfaced in `sd show <seed>` and the plan now blocked by their progress.
 - **Manual notes around the backref block survive release.** The `seeds:plan-backref:start/end` markers are the only thing `stripPlanBackref` touches; string-based search/replace is explicitly avoided.
 - **JSONL byte stability.** `plan.adoptedChildren` is only persisted when non-empty, and is dropped from the row when release empties it. Plans that never use adoption produce the same `plans.jsonl` bytes as before the feature shipped.
+
+## In-Place Editing (`sd plan edit`)
+
+`sd plan edit` performs targeted, field-level edits without going through the full `sd plan submit --overwrite` ceremony. It's the planning analog of `sd update` for issues.
+
+```bash
+sd plan edit <id> [--name <text>]
+                  [--section <name> <text>]
+                  [--step <i> [--title <text>] [--priority <p>] [--type <type>]]
+                  [--json]
+```
+
+- `<id>` accepts a plan id (`pl-*`) or the parent seed id (resolved via the same `resolvePlanIdArg` used by `sd plan show`).
+- All flags compose atomically in one invocation. `plan.revision` is bumped exactly once and `plan.updatedAt` is refreshed regardless of how many fields changed.
+- Lock order matches the rest of the planning surface: outer `plans.jsonl`, inner `issues.jsonl` (mx-f29e43). Both files are touched under the combined lock so combined edits stay atomic.
+- Out-of-scope by design: **structural edits** — adding, removing, or reordering steps — still require `sd plan submit --overwrite`. The edit command never spawns or orphans children and never renumbers `step.blocks`.
+
+### `--name <text>`
+
+Replaces `plan.name`. Empty string is rejected. No child seeds are touched.
+
+### `--section <name> <text>`
+
+Replaces `plan.sections[name]` with the supplied text. V1 supports text sections only (no `list` / `steps` / object-spec kinds); the name must resolve in the template's section spec.
+
+`--section approach` is special-cased: after the section is written, the `seeds:plan-backref` block on every entry in `plan.children` is refreshed (`applyPlanBackref`) so the snippet rendered in each child seed's description stays in sync with the live approach. Other sections do not touch children.
+
+### `--step <i> [--title <text>] [--priority <p>] [--type <type>]`
+
+`--step` is the **1-based** blueprint step index (matching `step.blocks` and `sd plan adopt --step <i>`). At least one of `--title` / `--priority` / `--type` must be provided alongside `--step`; conversely, those metadata flags are only meaningful with `--step`.
+
+Edits mutate `plan.sections.steps[i-1]` in place and propagate to the child seed at `plan.children[i-1]`:
+
+- `--title` updates both the blueprint step's `title` and the child seed's `title`.
+- `--priority` accepts `0-4` or `P0-P4` (same parser as `sd update --priority`) and updates the child seed's `priority`. The blueprint step's `priority` is also updated for consistency.
+- `--type` is validated against `VALID_TYPES` (`task | bug | feature | epic`) and updates the child seed's `type`.
+
+Out-of-range `--step` (less than 1 or greater than `plan.sections.steps.length`) is rejected pre-write with a clear error; both JSONL files stay untouched.
+
+Adopted children are edited just like spawned ones — the lookup is purely by index. If a step has no corresponding entry in `plan.children` (shouldn't happen on a healthy plan), the command rejects.
+
+### Concurrency and atomicity
+
+The combined locks acquired by `sd plan edit` are the same outer/inner pair as `sd plan submit`, `sd plan outcome`, `sd plan review`, `sd plan adopt`, and `sd plan release`. Concurrent `sd plan edit` from multiple agents serializes through the advisory lock model; last-write-wins on the JSONL contents.
 
 ## Outcomes
 

@@ -113,7 +113,7 @@ describe("sd setup pi", () => {
 
 		const claude = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
 		expect(claude).toContain("<!-- seeds:start -->");
-		expect(claude).toContain("seeds-onboard-schema:5:pi");
+		expect(claude).toContain("seeds-onboard-schema:6:pi");
 		// Short pi-aware variant should reference the extension, not the
 		// `sd prime` ritual the bare snippet leads with.
 		expect(claude).toContain("@os-eco/pi-seeds");
@@ -167,8 +167,8 @@ describe("sd setup pi", () => {
 
 		// CLAUDE.md reverted to bare snippet — marker drops the :pi suffix.
 		const claude = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(claude).toContain("seeds-onboard-schema:5");
-		expect(claude).not.toContain("seeds-onboard-schema:5:pi");
+		expect(claude).toContain("seeds-onboard-schema:6");
+		expect(claude).not.toContain("seeds-onboard-schema:6:pi");
 		expect(claude).toContain("At the start of every session");
 
 		const recheck = await run(["setup", "pi", "--check", "--json"], tmpDir);
@@ -198,7 +198,7 @@ describe("sd setup pi", () => {
 		const { exitCode } = await run(["setup", "pi"], tmpDir);
 		expect(exitCode).toBe(0);
 		const claude = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(claude).toContain("seeds-onboard-schema:5:pi");
+		expect(claude).toContain("seeds-onboard-schema:6:pi");
 	});
 
 	test("install upgrades existing bare snippet to pi variant", async () => {
@@ -206,13 +206,13 @@ describe("sd setup pi", () => {
 		// Pre-existing bare onboard snippet.
 		await run(["onboard"], tmpDir);
 		const before = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(before).toContain("seeds-onboard-schema:5");
-		expect(before).not.toContain("seeds-onboard-schema:5:pi");
+		expect(before).toContain("seeds-onboard-schema:6");
+		expect(before).not.toContain("seeds-onboard-schema:6:pi");
 
 		const { exitCode } = await run(["setup", "pi"], tmpDir);
 		expect(exitCode).toBe(0);
 		const after = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(after).toContain("seeds-onboard-schema:5:pi");
+		expect(after).toContain("seeds-onboard-schema:6:pi");
 		// Should not duplicate the section.
 		const startCount = (after.match(/<!-- seeds:start -->/g) ?? []).length;
 		expect(startCount).toBe(1);

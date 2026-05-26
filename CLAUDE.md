@@ -235,6 +235,11 @@ sd plan list                           List plans
 sd plan adopt <pl-id> <seed-id...>     Adopt already-open seeds into a plan (link-only; bumps revision)
   --step <i>                           Anchor adopted seeds at a 1-based blueprint step index
 sd plan release <pl-id> <seed-id...>   Detach seeds from a plan without closing them (link-only; bumps revision)
+sd plan edit <id>                      Edit plan fields in place (accepts plan id or seed id); bumps revision
+  --name <text>                        Set the plan's human-readable label
+  --section <name> <text>              Replace a text section (V1: text sections only; --section approach refreshes child backrefs)
+  --step <i>                           1-based step index to edit (combine with one or more of --title / --priority / --type)
+  --title --priority --type            Step metadata; propagates to the corresponding child seed via plan.children[i-1]
 sd plan outcome <pl-id> --result <v>   Record success | partial | failure (--note <text>)
 sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a state transition)
 ```
@@ -285,6 +290,7 @@ sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a s
 - Built-in templates: `feature` (default for `task`/`feature`/`epic`), `bug` (default for `bug`), `refactor` (opt-in via `--template refactor`).
 - The flow is `sd plan prompt <seed>` → fill the JSON → `sd plan submit <seed> --plan <file>`. Submit spawns one child seed per step and wires `step.blocks` into `blockedBy` dependencies.
 - Plan outcomes (`success | partial | failure`) and reviewers are storage-only — they never gate child progress.
+- Use `sd plan edit` for targeted field-level fixes (typo in approach, rename a step, change a step's priority/type). Structural edits — adding, removing, or reordering steps — still require `sd plan submit --overwrite`. Editing `--section approach` refreshes the `seeds:plan-backref` block on every child seed; `--step <i> --title <text>` renames the corresponding child seed.
 
 ## Testing
 
@@ -412,10 +418,10 @@ context, run `ml search --archived <query>`.
 
 <!-- seeds:start -->
 ## Issue Tracking (Seeds)
-<!-- seeds-onboard:v0.4.0 -->
-<!-- seeds-onboard-schema:4 -->
+<!-- seeds-onboard:v0.4.7 -->
+<!-- seeds-onboard-schema:6 -->
 
-This project uses [Seeds](https://github.com/jayminwest/seeds) v0.4.0 for git-native issue tracking.
+This project uses [Seeds](https://github.com/jayminwest/seeds) v0.4.7 for git-native issue tracking.
 
 **At the start of every session**, run:
 ```
@@ -434,12 +440,13 @@ This injects session context: rules, command reference, and workflows. Pass `--f
 - `sd sync` — Sync with git (run before pushing)
 
 ### Planning
-Use `sd plan` when work is large or ambiguous enough that an LLM benefits from structured decomposition. Submit spawns one child seed per step and wires `step.blocks` into `blockedBy` dependencies.
+Use `sd plan` when work is large or ambiguous enough that an LLM benefits from structured decomposition. Submit spawns one child seed per step; `step.blocks` uses forward semantics (step i with `blocks: [j]` means step i blocks step j, and step j gets step i's id in its `blockedBy`).
 
 - `sd plan templates` — List built-ins (`feature`, `bug`, `refactor`) plus custom templates
 - `sd plan prompt <seed-id>` — Emit a structured prompt the LLM fills in
 - `sd plan submit <seed-id> --plan <file>` — Validate + spawn child seeds
 - `sd plan show <pl-id>` — View sections, children, sub-plans
+- `sd plan edit <id> [--name | --section <name> <text> | --step <i> --title/--priority/--type]` — In-place field edits; bumps revision
 - `sd plan outcome <pl-id> --result success|partial|failure` — Record outcome (storage-only)
 - `sd plan review <pl-id> --by <name>` — Record reviewer (informational)
 

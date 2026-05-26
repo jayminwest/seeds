@@ -146,6 +146,12 @@ const FULL_SECTIONS: PrimeSectionsFull = {
 				},
 				{ command: "sd plan show <pl-id>", description: "Sections, children, nested sub-plans" },
 				{
+					command:
+						"sd plan edit <id> [--name|--section <n> <t>|--step <i> --title/--priority/--type]",
+					description:
+						"In-place field edits; bumps revision. Structural changes still need --overwrite.",
+				},
+				{
 					command: "sd plan outcome <pl-id> --result success|partial|failure",
 					description: "Storage-only outcome",
 				},

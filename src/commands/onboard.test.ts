@@ -187,6 +187,7 @@ describe("sd onboard", () => {
 		expect(content).toContain("sd plan prompt");
 		expect(content).toContain("sd plan submit");
 		expect(content).toContain("sd plan show");
+		expect(content).toContain("sd plan edit");
 		expect(content).toContain("sd plan outcome");
 		expect(content).toContain("sd plan review");
 	});
@@ -208,11 +209,11 @@ describe("sd onboard", () => {
 		expect(matches.length).toBe(1);
 	});
 
-	test("schema marker is at version 5 (pi variant landed)", async () => {
+	test("schema marker is at version 6 (sd plan edit added to planning bullets)", async () => {
 		await initSeeds(tmpDir);
 		await run(["onboard"], tmpDir);
 		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(content).toContain("<!-- seeds-onboard-schema:5 -->");
+		expect(content).toContain("<!-- seeds-onboard-schema:6 -->");
 	});
 
 	test("auto-detects pi variant when .pi/settings.json lists seeds-cli", async () => {
@@ -224,7 +225,7 @@ describe("sd onboard", () => {
 		const { exitCode } = await run(["onboard"], tmpDir);
 		expect(exitCode).toBe(0);
 		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(content).toContain("seeds-onboard-schema:5:pi");
+		expect(content).toContain("seeds-onboard-schema:6:pi");
 		expect(content).toContain("@os-eco/pi-seeds");
 	});
 
@@ -239,7 +240,7 @@ describe("sd onboard", () => {
 		await run(["onboard"], tmpDir);
 		const second = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
 		expect(second).toBe(first);
-		expect(second).toContain("seeds-onboard-schema:5:pi");
+		expect(second).toContain("seeds-onboard-schema:6:pi");
 	});
 
 	test("--check after install reports current; mismatched variant reports outdated", async () => {

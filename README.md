@@ -97,6 +97,7 @@ Every command supports `--json` for structured output. `sd list`, `sd ready`, `s
 | `sd plan list` | List plans (`--seed`, `--status`, `--outcome`, `--template`) |
 | `sd plan adopt <plan-id> <seed-id...>` | Adopt one or more already-open seeds into an existing plan (`--step <i>` to anchor at a blueprint step index; link-only, bumps revision) |
 | `sd plan release <plan-id> <seed-id...>` | Detach one or more seeds from a plan without closing them (link-only; bumps revision) |
+| `sd plan edit <id>` | Edit plan fields in place (`--name`, `--section <name> <text>`, `--step <i>` with `--title`/`--priority`/`--type`); accepts plan id or seed id; bumps revision |
 | `sd plan outcome <pl-id> --result <success\|partial\|failure>` | Record a plan outcome (`--note`) |
 | `sd plan review <pl-id> --by <name>` | Record a reviewer (informational; not a state transition) |
 
@@ -283,6 +284,31 @@ $ sd show seeds-bb11   # still open, plan link gone, backref block stripped
 ```
 
 Adoption applies the `seeds:plan-backref` block to the adopted seed's description (manual notes wrapping the markers survive). Release strips only that marker block. `sd plan show` tags adopted children with a muted `(adopted)` suffix in human output; `--json` adds `adopted: true` to each child summary that's listed in `plan.adoptedChildren`.
+
+### Editing a plan in place
+
+Use `sd plan edit` for targeted, field-level fixes — typo in the approach section, rename a step, change a step's priority or type — without re-submitting the whole plan JSON via `--overwrite`. Each invocation bumps `plan.revision` once and updates `plan.updatedAt`; structural edits (add/remove/reorder steps) still require `--overwrite`.
+
+```bash
+# Rename the plan label
+sd plan edit pl-a1b2 --name "OAuth login (v2)"
+
+# Replace a text section. --section approach also refreshes the seeds:plan-backref
+# block on every child seed so the snippet stays in sync with the live plan.
+sd plan edit pl-a1b2 --section approach "Use the new provider SDK; ..."
+sd plan edit pl-a1b2 --section context  "...updated rationale..."
+
+# Step metadata edits propagate to the corresponding child seed
+# (looked up via plan.children[i-1]; --step is 1-based, matching step.blocks).
+sd plan edit pl-a1b2 --step 2 --title "Wire callback handler (PKCE)"
+sd plan edit pl-a1b2 --step 2 --priority 1
+sd plan edit pl-a1b2 --step 2 --type bug
+
+# Multiple flags compose atomically in one invocation
+sd plan edit pl-a1b2 --name "OAuth v2" --section approach "..." --step 2 --priority 1
+```
+
+`<id>` accepts either a plan id (`pl-*`) or the parent seed id. Out-of-range `--step` and unknown sections exit non-zero with both JSONL files untouched. Lock order matches the rest of the planning surface: outer `plans.jsonl`, inner `issues.jsonl`.
 
 Rejections are fail-fast and pre-write (both `plans.jsonl` and `issues.jsonl` are untouched on any error):
 
