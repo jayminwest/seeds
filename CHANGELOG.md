@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Test suite runs ~5.5× faster** (~99s → ~18s for 882 tests). Command tests now invoke the exported `run`/`register` entry points in-process via `src/test-harness.ts` instead of spawning `bun run src/index.ts` per assertion. The harness captures `console.log`/`console.error`/`process.stdout.write`/`Bun.write(Bun.stdout)`, snapshots/restores `process.exitCode` and `process.cwd()`, forces `chalk.level = 0` to match subprocess ANSI behavior, and propagates commander `exitOverride()` to subcommands so nested `--help` doesn't kill the test runner. Remaining subprocess spawns are explicitly justified: `src/cli-smoke.test.ts` covers the real binary boot path (registerAll, --help, --version, unknown-command suggester, main().catch JSON wrapper); `src/commands/completions.test.ts`, `src/suggestions.test.ts`, and `src/timing.test.ts` exercise root-level commander surfaces that require the full command tree; `src/commands/plan-submit-record-decision.test.ts` keeps a fake `ml` binary on PATH; `src/commands/sync.test.ts` keeps real `git` operations. (seeds-a3bd, pl-86aa)
+
 ### Added
 - `sd plan edit <id>` performs targeted, field-level edits to an existing plan without going through the full `sd plan submit --overwrite` ceremony. `<id>` accepts a plan id (`pl-*`) or the parent seed id (same resolver as `sd plan show`). Every invocation bumps `plan.revision` exactly once and refreshes `plan.updatedAt`. Lock order matches the rest of the planning surface: outer `plans.jsonl`, inner `issues.jsonl` (mx-f29e43). Structural changes — adding, removing, or reordering steps — are out of scope by design and still require `--overwrite`. (seeds-a2de / plan pl-dee8)
   - `--name <text>` sets the plan's human-readable label (the same field `sd plan submit --name` writes). Empty string rejected. (seeds-9b12, pl-dee8 step 1)
