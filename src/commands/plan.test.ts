@@ -3728,3 +3728,202 @@ describe("sd plan edit (seeds-9b12 / pl-dee8 step 1): --name", () => {
 		expect(stdout).toContain("name");
 	});
 });
+
+describe("sd plan edit (seeds-21f2 / pl-dee8 step 2): --section", () => {
+	async function submit(): Promise<{ seedId: string; planId: string; revision: number }> {
+		const seedId = await createSeed(tmpDir, "Section editable seed");
+		const planPath = await writePlanFile(tmpDir, validPlanFor());
+		const { stdout, exitCode, stderr } = await run(
+			["plan", "submit", seedId, "--plan", planPath, "--json"],
+			tmpDir,
+		);
+		if (exitCode !== 0) throw new Error(`submit failed: ${stderr}`);
+		const parsed = JSON.parse(stdout) as { plan_id: string; revision: number };
+		return { seedId, planId: parsed.plan_id, revision: parsed.revision };
+	}
+
+	async function readPlanRow(planId: string): Promise<{
+		id: string;
+		revision: number;
+		updatedAt: string;
+		sections: Record<string, unknown>;
+		children: string[];
+	}> {
+		const plans = await readJsonl<{
+			id: string;
+			revision: number;
+			updatedAt: string;
+			sections: Record<string, unknown>;
+			children: string[];
+		}>(join(tmpDir, ".seeds/plans.jsonl"));
+		const found = plans.find((p) => p.id === planId);
+		if (!found) throw new Error(`plan not found: ${planId}`);
+		return found;
+	}
+
+	async function readIssueRow(id: string): Promise<{
+		id: string;
+		description?: string;
+		updatedAt: string;
+	}> {
+		const issues = await readJsonl<{
+			id: string;
+			description?: string;
+			updatedAt: string;
+		}>(join(tmpDir, ".seeds/issues.jsonl"));
+		// Last-write-wins (dedup-on-read): scan from the end to mirror live behavior.
+		for (let i = issues.length - 1; i >= 0; i--) {
+			const row = issues[i];
+			if (row && row.id === id) return row;
+		}
+		throw new Error(`issue not found: ${id}`);
+	}
+
+	test("--section context updates text without touching children", async () => {
+		const { planId, revision } = await submit();
+		const before = await readPlanRow(planId);
+		const firstChild = before.children[0];
+		if (!firstChild) throw new Error("expected children");
+		const childBefore = await readIssueRow(firstChild);
+		const newContext = `${VALID_CONTEXT} Also: edited via sd plan edit.`;
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--section", "context", newContext, "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			revision: number;
+			backrefs_refreshed: number;
+		};
+		expect(payload.edited).toEqual(["section:context"]);
+		expect(payload.revision).toBe(revision + 1);
+		expect(payload.backrefs_refreshed).toBe(0);
+
+		const after = await readPlanRow(planId);
+		expect(after.sections.context).toBe(newContext);
+		expect(after.revision).toBe(revision + 1);
+
+		const childAfter = await readIssueRow(firstChild);
+		expect(childAfter.updatedAt).toBe(childBefore.updatedAt);
+		expect(childAfter.description).toBe(childBefore.description);
+	});
+
+	test("--section approach updates text AND refreshes backrefs on all children", async () => {
+		const { planId, revision } = await submit();
+		const before = await readPlanRow(planId);
+		const children = before.children;
+		expect(children.length).toBeGreaterThan(0);
+		const newApproach = "Edited approach: now we do it the new way for clarity.";
+
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--section", "approach", newApproach, "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			revision: number;
+			backrefs_refreshed: number;
+		};
+		expect(payload.edited).toEqual(["section:approach"]);
+		expect(payload.revision).toBe(revision + 1);
+		expect(payload.backrefs_refreshed).toBe(children.length);
+
+		const after = await readPlanRow(planId);
+		expect(after.sections.approach).toBe(newApproach);
+
+		for (const childId of children) {
+			const child = await readIssueRow(childId);
+			expect(child.description ?? "").toContain("seeds:plan-backref:start");
+			expect(child.description ?? "").toContain("Edited approach");
+		}
+	});
+
+	test("--name and --section combine atomically", async () => {
+		const { planId, revision } = await submit();
+		const { stdout, exitCode } = await run(
+			[
+				"plan",
+				"edit",
+				planId,
+				"--name",
+				"Combined",
+				"--section",
+				"context",
+				`${VALID_CONTEXT} extra.`,
+				"--json",
+			],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			edited: string[];
+			name?: string;
+			revision: number;
+		};
+		expect(payload.edited).toEqual(["name", "section:context"]);
+		expect(payload.name).toBe("Combined");
+		expect(payload.revision).toBe(revision + 1);
+	});
+
+	test("unknown section name exits non-zero without mutation", async () => {
+		const { planId } = await submit();
+		const before = await readPlanRow(planId);
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--section", "nonexistent", "some text"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Unknown section");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+	});
+
+	test("--section on a non-text section (alternatives) is rejected", async () => {
+		const { planId } = await submit();
+		const before = await readPlanRow(planId);
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--section", "alternatives", "some text"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("kind=text only");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+	});
+
+	test("--section context with too-short text is rejected (min_length)", async () => {
+		const { planId } = await submit();
+		const before = await readPlanRow(planId);
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--section", "context", "short"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("at least");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+	});
+
+	test("--section without text exits non-zero", async () => {
+		const { planId } = await submit();
+		const { stderr, exitCode } = await run(
+			["plan", "edit", planId, "--section", "approach"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--section");
+	});
+
+	test("plan show surfaces the edited section text", async () => {
+		const { planId } = await submit();
+		const newApproach = "Refined approach surfaced by sd plan show after edit.";
+		await run(["plan", "edit", planId, "--section", "approach", newApproach], tmpDir);
+		const { stdout } = await run(["plan", "show", planId, "--json"], tmpDir);
+		const parsed = JSON.parse(stdout) as {
+			plan: { sections: { approach?: string } };
+		};
+		expect(parsed.plan.sections.approach).toBe(newApproach);
+	});
+});

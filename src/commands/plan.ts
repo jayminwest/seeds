@@ -151,9 +151,17 @@ Plan name resolution:
 		.command("edit <id>")
 		.description("Edit plan fields in place (accepts plan id or seed id); bumps revision")
 		.option("--name <text>", "Set the plan's human-readable label")
+		.option(
+			"--section <name-and-text...>",
+			"Replace a text section: --section <name> <text> (V1: text sections only)",
+		)
 		.option("--json", "Output as JSON")
-		.action(async (id: string, opts: { name?: string; json?: boolean }) => {
-			await runEdit(id, { name: opts.name, jsonMode: Boolean(opts.json) });
+		.action(async (id: string, opts: { name?: string; section?: string[]; json?: boolean }) => {
+			await runEdit(id, {
+				name: opts.name,
+				section: opts.section,
+				jsonMode: Boolean(opts.json),
+			});
 		});
 
 	plan
@@ -1985,22 +1993,53 @@ function countBlueprintSteps(plan: Plan): number {
 
 interface EditOptions {
 	name?: string;
+	section?: string[];
 	jsonMode: boolean;
 }
 
-// sd plan edit <id> (seeds-9b12 / pl-dee8 step 1). In-place plan field editing.
-// V1 supports --name; --section and --step land in sibling steps. Mutation
+// Parse `--section <name> <text>` variadic capture into (name, text). The
+// commander option type is `<name-and-text...>` so users MUST shell-quote the
+// text (otherwise additional words spill into the array and we error rather
+// than silently joining — agents wrapping seeds rely on explicit failure).
+function parseSectionFlag(raw: string[] | undefined): { name: string; text: string } | undefined {
+	if (raw === undefined) return undefined;
+	if (raw.length < 2) {
+		throw new Error("--section requires two arguments: --section <name> <text> (quote the text).");
+	}
+	if (raw.length > 2) {
+		throw new Error(
+			'--section received more than two arguments. Quote the text: --section <name> "<text>".',
+		);
+	}
+	const name = raw[0];
+	const text = raw[1];
+	if (!name || name.trim().length === 0) {
+		throw new Error("--section name must be a non-empty string.");
+	}
+	return { name, text: text ?? "" };
+}
+
+// sd plan edit <id> (pl-dee8). In-place plan field editing. V1 supports --name
+// and --section (text sections only); --step lands in seeds-64cf. Mutation
 // always bumps revision + updatedAt, even when no fields actually changed
 // from prior values — the revision bump is the contract, callers rely on it
 // for cache invalidation.
+//
+// Lock order: outer plans, inner issues (mx-f29e43). Issues lock is only
+// acquired when --section approach changes (children backref refresh).
 async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 	const dir = await findSeedsDir();
 	const planId = await resolvePlanIdArg(idArg, dir);
 
+	const section = parseSectionFlag(opts.section);
+
 	const editedFields: string[] = [];
 	if (opts.name !== undefined) editedFields.push("name");
+	if (section !== undefined) editedFields.push(`section:${section.name}`);
 	if (editedFields.length === 0) {
-		throw new Error("No fields to edit. Pass at least one of: --name <text>.");
+		throw new Error(
+			"No fields to edit. Pass at least one of: --name <text>, --section <name> <text>.",
+		);
 	}
 
 	let nextName: string | undefined;
@@ -2012,6 +2051,7 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 	}
 
 	let updatedPlan: Plan | null = null;
+	let approachChanged = false;
 	await withLock(plansPath(dir), async () => {
 		const plans = await readPlans(dir);
 		const idx = plans.findIndex((p) => p.id === planId);
@@ -2019,15 +2059,91 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 		if (!plan) {
 			throw new Error(`Plan not found: ${planId}. Run 'sd plan list' to see available plans.`);
 		}
+
+		let nextSections = plan.sections;
+		if (section !== undefined) {
+			const templates = await loadPlanTemplates(dir);
+			const template = templates[plan.template];
+			if (!template) {
+				const available = Object.keys(templates).join(", ");
+				throw new Error(
+					`Plan ${planId} references unknown template '${plan.template}'. Available: ${available}.`,
+				);
+			}
+			const spec = template.sections[section.name];
+			if (!spec) {
+				const known = Object.keys(template.sections).join(", ");
+				throw new Error(
+					`Unknown section '${section.name}' for template '${plan.template}'. Known: ${known}.`,
+				);
+			}
+			if (spec.kind !== "text") {
+				throw new Error(
+					`--section editing supports kind=text only (V1). Section '${section.name}' is kind=${typeof spec.kind === "string" ? spec.kind : "object"}. Use 'sd plan submit --overwrite' for structural edits.`,
+				);
+			}
+			const minLength = spec.min_length ?? 0;
+			if (spec.required && section.text.trim().length === 0) {
+				throw new Error(`Section '${section.name}' is required and cannot be empty.`);
+			}
+			if (minLength > 0 && section.text.length < minLength) {
+				throw new Error(
+					`Section '${section.name}' must be at least ${minLength} characters (got ${section.text.length}).`,
+				);
+			}
+			const prior = (plan.sections as Record<string, unknown>)[section.name];
+			nextSections = { ...plan.sections, [section.name]: section.text };
+			if (section.name === "approach" && prior !== section.text) {
+				approachChanged = true;
+			}
+		}
+
+		const now = new Date().toISOString();
 		const next: Plan = {
 			...plan,
+			sections: nextSections,
 			revision: plan.revision + 1,
-			updatedAt: new Date().toISOString(),
+			updatedAt: now,
 		};
 		if (nextName !== undefined) next.name = nextName;
 		plans[idx] = next;
 		await writePlans(dir, plans);
 		updatedPlan = next;
+
+		// Refresh backref on every child seed when approach text changes. Plan
+		// children are ordered to align with sections.steps — children[i] is the
+		// seed for step i. Loose adoptions (no plan_step_index) get the
+		// stepIndex=undefined branch in applyPlanBackref.
+		if (approachChanged) {
+			await withLock(issuesPath(dir), async () => {
+				const allIssues = await readIssues(dir);
+				const parentIdx = allIssues.findIndex((iss) => iss.id === next.seed);
+				const parent = allIssues[parentIdx];
+				if (!parent) return;
+				const approach = (next.sections as { approach?: unknown }).approach;
+				let dirty = false;
+				for (const childId of next.children) {
+					const cIdx = allIssues.findIndex((iss) => iss.id === childId);
+					const child = allIssues[cIdx];
+					if (!child) continue;
+					const stepIndex = child.plan_step_index;
+					allIssues[cIdx] = {
+						...child,
+						description: applyPlanBackref(child.description, {
+							stepIndex,
+							planId: next.id,
+							parentSeedId: parent.id,
+							parentSeedTitle: parent.title,
+							templateName: next.template,
+							approach,
+						}),
+						updatedAt: now,
+					};
+					dirty = true;
+				}
+				if (dirty) await writeIssues(dir, allIssues);
+			});
+		}
 	});
 
 	if (!updatedPlan) return;
@@ -2041,12 +2157,16 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 			revision: finalPlan.revision,
 			edited: editedFields,
 			name: finalPlan.name,
+			backrefs_refreshed: approachChanged ? finalPlan.children.length : 0,
 		});
 		return;
 	}
 	printSuccess(
 		`plan ${accent(finalPlan.id)} edited (${editedFields.join(", ")}); revision ${finalPlan.revision}`,
 	);
+	if (approachChanged) {
+		printSuccess(`refreshed backrefs on ${finalPlan.children.length} child seed(s)`);
+	}
 }
 
 async function runReview(idArg: string, by: string, jsonMode: boolean): Promise<void> {
