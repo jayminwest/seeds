@@ -183,6 +183,15 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 			const program = new Command();
 			program.exitOverride();
 			mod.register(program);
+			// Propagate exitOverride to subcommands recursively. Commander does
+			// NOT inherit the override down the tree, so `sd plan --help` (or
+			// any nested `--help`) would otherwise call process.exit(0) and
+			// kill the bun:test runner mid-suite.
+			const applyOverride = (c: Command): void => {
+				c.exitOverride();
+				for (const child of c.commands) applyOverride(child);
+			};
+			for (const child of program.commands) applyOverride(child);
 			await program.parseAsync(["bun", "sd", cmd, ...args.slice(1)]);
 		} else {
 			throw new Error(`runCli: command "${cmd}" exports neither run nor register`);
@@ -205,6 +214,18 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 	process.exitCode = origExitCode;
 
 	if (thrown !== undefined) {
+		// Commander signals successful --help / --version termination by
+		// throwing CommanderError with a `commander.helpDisplayed` /
+		// `commander.version` code under exitOverride. Treat those as exit 0
+		// (matches subprocess behavior where commander calls process.exit(0)).
+		const code = (thrown as { code?: string }).code;
+		if (code === "commander.helpDisplayed" || code === "commander.version") {
+			return {
+				stdout: stdoutChunks.join(""),
+				stderr: stderrChunks.join(""),
+				exitCode: 0,
+			};
+		}
 		// Mirror src/index.ts main().catch: emit error to stderr (or to stdout
 		// as JSON when --json was passed), and exit 1.
 		const msg = thrown instanceof Error ? thrown.message : String(thrown);
