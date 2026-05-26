@@ -148,6 +148,15 @@ Plan name resolution:
 		});
 
 	plan
+		.command("edit <id>")
+		.description("Edit plan fields in place (accepts plan id or seed id); bumps revision")
+		.option("--name <text>", "Set the plan's human-readable label")
+		.option("--json", "Output as JSON")
+		.action(async (id: string, opts: { name?: string; json?: boolean }) => {
+			await runEdit(id, { name: opts.name, jsonMode: Boolean(opts.json) });
+		});
+
+	plan
 		.command("adopt <plan-id> <seed-ids...>")
 		.description("Adopt existing open seeds into a plan (link-only; bumps plan revision)")
 		.option(
@@ -1972,6 +1981,72 @@ function parseStepFlag(raw: string | undefined): number | undefined {
 function countBlueprintSteps(plan: Plan): number {
 	const steps = (plan.sections as { steps?: unknown }).steps;
 	return Array.isArray(steps) ? steps.length : 0;
+}
+
+interface EditOptions {
+	name?: string;
+	jsonMode: boolean;
+}
+
+// sd plan edit <id> (seeds-9b12 / pl-dee8 step 1). In-place plan field editing.
+// V1 supports --name; --section and --step land in sibling steps. Mutation
+// always bumps revision + updatedAt, even when no fields actually changed
+// from prior values — the revision bump is the contract, callers rely on it
+// for cache invalidation.
+async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
+	const dir = await findSeedsDir();
+	const planId = await resolvePlanIdArg(idArg, dir);
+
+	const editedFields: string[] = [];
+	if (opts.name !== undefined) editedFields.push("name");
+	if (editedFields.length === 0) {
+		throw new Error("No fields to edit. Pass at least one of: --name <text>.");
+	}
+
+	let nextName: string | undefined;
+	if (opts.name !== undefined) {
+		nextName = normalizePlanName(opts.name);
+		if (!nextName) {
+			throw new Error("--name must be a non-empty string.");
+		}
+	}
+
+	let updatedPlan: Plan | null = null;
+	await withLock(plansPath(dir), async () => {
+		const plans = await readPlans(dir);
+		const idx = plans.findIndex((p) => p.id === planId);
+		const plan = plans[idx];
+		if (!plan) {
+			throw new Error(`Plan not found: ${planId}. Run 'sd plan list' to see available plans.`);
+		}
+		const next: Plan = {
+			...plan,
+			revision: plan.revision + 1,
+			updatedAt: new Date().toISOString(),
+		};
+		if (nextName !== undefined) next.name = nextName;
+		plans[idx] = next;
+		await writePlans(dir, plans);
+		updatedPlan = next;
+	});
+
+	if (!updatedPlan) return;
+	const finalPlan: Plan = updatedPlan;
+
+	if (opts.jsonMode) {
+		await outputJson({
+			success: true,
+			command: "plan edit",
+			plan_id: finalPlan.id,
+			revision: finalPlan.revision,
+			edited: editedFields,
+			name: finalPlan.name,
+		});
+		return;
+	}
+	printSuccess(
+		`plan ${accent(finalPlan.id)} edited (${editedFields.join(", ")}); revision ${finalPlan.revision}`,
+	);
 }
 
 async function runReview(idArg: string, by: string, jsonMode: boolean): Promise<void> {

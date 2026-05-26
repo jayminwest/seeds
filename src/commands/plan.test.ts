@@ -3602,3 +3602,129 @@ describe("sd plan: name field (seeds-5640)", () => {
 		expect(row?.name).toBe("Plan with JSON name");
 	});
 });
+
+describe("sd plan edit (seeds-9b12 / pl-dee8 step 1): --name", () => {
+	async function submit(
+		seedTitle = "Editable seed",
+	): Promise<{ seedId: string; planId: string; revision: number }> {
+		const seedId = await createSeed(tmpDir, seedTitle);
+		const planPath = await writePlanFile(tmpDir, validPlanFor());
+		const { stdout, exitCode, stderr } = await run(
+			["plan", "submit", seedId, "--plan", planPath, "--json"],
+			tmpDir,
+		);
+		if (exitCode !== 0) throw new Error(`submit failed: ${stderr}`);
+		const parsed = JSON.parse(stdout) as { plan_id: string; revision: number };
+		return { seedId, planId: parsed.plan_id, revision: parsed.revision };
+	}
+
+	async function readPlanRow(
+		planId: string,
+	): Promise<{ id: string; name?: string; revision: number; updatedAt: string }> {
+		const plans = await readJsonl<{
+			id: string;
+			name?: string;
+			revision: number;
+			updatedAt: string;
+		}>(join(tmpDir, ".seeds/plans.jsonl"));
+		const found = plans.find((p) => p.id === planId);
+		if (!found) throw new Error(`plan not found: ${planId}`);
+		return found;
+	}
+
+	test("--name updates plan.name, bumps revision, persists", async () => {
+		const { planId, revision } = await submit("Old name");
+		const before = await readPlanRow(planId);
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--name", "New shiny name", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as {
+			success: boolean;
+			command: string;
+			plan_id: string;
+			revision: number;
+			edited: string[];
+			name?: string;
+		};
+		expect(payload.success).toBe(true);
+		expect(payload.command).toBe("plan edit");
+		expect(payload.plan_id).toBe(planId);
+		expect(payload.edited).toEqual(["name"]);
+		expect(payload.name).toBe("New shiny name");
+		expect(payload.revision).toBe(revision + 1);
+
+		const after = await readPlanRow(planId);
+		expect(after.name).toBe("New shiny name");
+		expect(after.revision).toBe(revision + 1);
+		expect(after.updatedAt >= before.updatedAt).toBe(true);
+	});
+
+	test("--name trims whitespace before persisting", async () => {
+		const { planId } = await submit();
+		await run(["plan", "edit", planId, "--name", "  Padded label  ", "--json"], tmpDir);
+		const row = await readPlanRow(planId);
+		expect(row.name).toBe("Padded label");
+	});
+
+	test("--name accepts a seed id (resolvePlanIdArg)", async () => {
+		const { seedId, planId } = await submit();
+		const { stdout, exitCode } = await run(
+			["plan", "edit", seedId, "--name", "Via seed id", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		const payload = JSON.parse(stdout) as { plan_id: string };
+		expect(payload.plan_id).toBe(planId);
+		const row = await readPlanRow(planId);
+		expect(row.name).toBe("Via seed id");
+	});
+
+	test("empty --name exits non-zero with a clear error", async () => {
+		const { planId } = await submit();
+		const before = await readPlanRow(planId);
+		const { stderr, exitCode } = await run(["plan", "edit", planId, "--name", "   "], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--name");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+	});
+
+	test("no edit flags exits non-zero without mutating the plan", async () => {
+		const { planId } = await submit();
+		const before = await readPlanRow(planId);
+		const { stderr, exitCode } = await run(["plan", "edit", planId], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("No fields to edit");
+		const after = await readPlanRow(planId);
+		expect(after.revision).toBe(before.revision);
+		expect(after.updatedAt).toBe(before.updatedAt);
+	});
+
+	test("unknown plan id exits non-zero", async () => {
+		const { stderr, exitCode } = await run(["plan", "edit", "pl-9999", "--name", "x"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Plan not found");
+	});
+
+	test("plan show surfaces the edited name", async () => {
+		const { planId } = await submit("Initial seed name");
+		await run(["plan", "edit", planId, "--name", "Reflected in show"], tmpDir);
+		const { stdout } = await run(["plan", "show", planId, "--json"], tmpDir);
+		const parsed = JSON.parse(stdout) as { plan: { name?: string; revision: number } };
+		expect(parsed.plan.name).toBe("Reflected in show");
+	});
+
+	test("human output reports the edit and new revision", async () => {
+		const { planId, revision } = await submit();
+		const { stdout, exitCode } = await run(
+			["plan", "edit", planId, "--name", "Pretty label"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain(planId);
+		expect(stdout).toContain(`revision ${revision + 1}`);
+		expect(stdout).toContain("name");
+	});
+});
