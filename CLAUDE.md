@@ -289,6 +289,7 @@ sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a s
 - For small, well-scoped tasks just `sd create` directly — planning has overhead.
 - Built-in templates: `feature` (default for `task`/`feature`/`epic`), `bug` (default for `bug`), `refactor` (opt-in via `--template refactor`).
 - The flow is `sd plan prompt <seed>` → fill the JSON → `sd plan submit <seed> --plan <file>`. Submit spawns one child seed per step and wires `step.blocks` into `blockedBy` dependencies.
+- Steps accept an optional `labels: string[]` field that flows to the spawned/adopted child seed. Values are normalized (lowercased, trimmed, deduped) and merged additively on adoption — they never clobber labels the user added by hand. Use this to tag agent-spawned children (e.g. `"labels": ["nightwatch"]`) without post-hoc `sd label add` calls.
 - Plan outcomes (`success | partial | failure`) and reviewers are storage-only — they never gate child progress.
 - Use `sd plan edit` for targeted field-level fixes (typo in approach, rename a step, change a step's priority/type). Structural edits — adding, removing, or reordering steps — still require `sd plan submit --overwrite`. Editing `--section approach` refreshes the `seeds:plan-backref` block on every child seed; `--step <i> --title <text>` renames the corresponding child seed.
 

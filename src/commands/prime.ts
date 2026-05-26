@@ -129,7 +129,7 @@ const FULL_SECTIONS: PrimeSectionsFull = {
 		{
 			name: "Planning",
 			notes: [
-				"Use `sd plan` when work is large or ambiguous enough to benefit from structured decomposition. The plan spawns one child seed per step; `step.blocks` uses forward semantics (step i with `blocks: [j]` means step i blocks step j). For small, well-scoped tasks, just `sd create` directly.",
+				'Use `sd plan` when work is large or ambiguous enough to benefit from structured decomposition. The plan spawns one child seed per step; `step.blocks` uses forward semantics (step i with `blocks: [j]` means step i blocks step j). Each step accepts an optional `labels: string[]` field (normalized lowercase/trim/dedup) that flows to the spawned child or merges additively into an adopted seed — useful for tagging agent-spawned children (e.g. `"labels": ["nightwatch"]`) without follow-up `sd label add` calls. For small, well-scoped tasks, just `sd create` directly.',
 			],
 			commands: [
 				{

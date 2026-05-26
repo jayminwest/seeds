@@ -73,7 +73,7 @@ Plan file shape:
     "name": "Schema-driven config editor",
     "sections": {
       "approach": "Plain-text approach...",
-      "steps": [{ "title": "Step 1" }, ...],
+      "steps": [{ "title": "Step 1", "labels": ["nightwatch"] }, ...],
       "acceptance": ["criterion 1", ...]
     }
   }
@@ -291,7 +291,7 @@ interface PlanRequest {
 }
 
 const INSTRUCTIONS =
-	'Fill every section. Required fields are marked. Use prior_art entries to ground decisions. Reply with JSON shaped { "template": "<name>", "name": "<short label>", "sections": { "<section-name>": <value>, ... } } — drop the plan_request wrapper, and sections in your reply is an object keyed by name (not the array of section metadata above). The top-level `name` field is an optional short human-readable label (e.g. "Schema-driven config editor"); if you omit it, sd plan submit derives one from the parent seed title. In each step, `blocks` lists 1-based step indices that this step blocks (step 1 is the first step, step N is the last); e.g. step 1 with `blocks: [2]` means step 1 must finish before step 2 starts. Leave empty if nothing depends on it.';
+	'Fill every section. Required fields are marked. Use prior_art entries to ground decisions. Reply with JSON shaped { "template": "<name>", "name": "<short label>", "sections": { "<section-name>": <value>, ... } } — drop the plan_request wrapper, and sections in your reply is an object keyed by name (not the array of section metadata above). The top-level `name` field is an optional short human-readable label (e.g. "Schema-driven config editor"); if you omit it, sd plan submit derives one from the parent seed title. Each step is shaped { title?, type?, priority?, blocks?: number[], labels?: string[], plan_template?, existing_seed? }. In each step, `blocks` lists 1-based step indices that this step blocks (step 1 is the first step, step N is the last); e.g. step 1 with `blocks: [2]` means step 1 must finish before step 2 starts. Leave empty if nothing depends on it. Optional `labels` is an array of non-empty strings applied to the spawned (or adopted) child seed; values are normalized (lowercased, trimmed, deduped) and merged additively on adoption — they never clobber existing labels.';
 
 function buildPlanRequest(
 	seedId: string,

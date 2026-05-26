@@ -180,7 +180,7 @@ Returns a structured prompt request the LLM can fill in:
 
 ### 2. Submit the filled plan
 
-The LLM produces a submission JSON in the same shape, with concrete content. Each `steps[]` entry becomes a child seed; `blocks: [step_index]` translates into seed-level `blockedBy` dependencies. Step indices in `blocks` are 1-based (step 1 is the first step).
+The LLM produces a submission JSON in the same shape, with concrete content. Each `steps[]` entry becomes a child seed; `blocks: [step_index]` translates into seed-level `blockedBy` dependencies. Step indices in `blocks` are 1-based (step 1 is the first step). A step may also declare an optional `labels: string[]` array — values are normalized (lowercased, trimmed, deduped) and applied to the spawned child seed (or merged additively into the adopted seed's existing labels).
 
 ```json
 {
@@ -190,7 +190,7 @@ The LLM produces a submission JSON in the same shape, with concrete content. Eac
     "context": "...",
     "approach": "Use AJV to validate template-driven plans, mirroring mulch's custom_types pipeline.",
     "steps": [
-      { "title": "Schema generator", "type": "task", "priority": 1, "blocks": [2, 3] },
+      { "title": "Schema generator", "type": "task", "priority": 1, "blocks": [2, 3], "labels": ["nightwatch"] },
       { "title": "Submit command",   "type": "task", "priority": 1, "blocks": [] },
       { "title": "Show command",     "type": "task", "priority": 2, "blocks": [] },
       { "title": "Audit cookie flags", "type": "task", "priority": 2, "blocks": [], "existing_seed": "seeds-aa05" }

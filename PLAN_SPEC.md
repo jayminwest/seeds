@@ -298,7 +298,7 @@ Templates are declared in `.seeds/config.yaml` under `plan_templates:`. Each tem
 | ------------- | ---------------------------------- | ----------------------------------------------------------- |
 | `text`        | string                             | `min_length` optional.                                      |
 | `list`        | array                              | `item: text` or `item: { ...object spec... }`. `min` opt.   |
-| `steps`       | array of step objects              | Spawns child seeds 1:1. Step is `{title?, type, priority, blocks: [step_index], plan_template?, existing_seed?}`. `blocks` uses 1-based step indices. `existing_seed` adopts an already-open seed instead of spawning a fresh child (see [Adoption and Release](#adoption-and-release)). `title` is required for fresh-spawn steps and optional for adoption-only steps (where the adopted seed's title is preserved). |
+| `steps`       | array of step objects              | Spawns child seeds 1:1. Step is `{title?, type, priority, blocks: [step_index], labels?: string[], plan_template?, existing_seed?}`. `blocks` uses 1-based step indices. `labels` is optional; values are normalized (lowercased, trimmed, deduped) and applied to the spawned child or merged additively into an adopted seed's existing labels (never clobbers). `existing_seed` adopts an already-open seed instead of spawning a fresh child (see [Adoption and Release](#adoption-and-release)). `title` is required for fresh-spawn steps and optional for adoption-only steps (where the adopted seed's title is preserved). |
 | object spec   | nested record of named fields      | Each field has its own `kind` recursively.                  |
 
 A custom template:
