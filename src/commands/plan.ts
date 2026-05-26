@@ -397,6 +397,10 @@ interface SubmittedStep {
 	blocks?: number[];
 	plan_template?: string;
 	existing_seed?: string;
+	// Optional per-step labels (seeds-7561 / pl-e5a8 step 1). Normalization
+	// (lowercase/trim/dedup) and propagation into spawned/adopted children land
+	// in subsequent plan steps (seeds-745e fresh-spawn, seeds-bac9 adoption).
+	labels?: string[];
 }
 
 interface SubmittedPlan {

@@ -33,6 +33,14 @@ const STEP_SCHEMA: JSONSchema = {
 		// any non-empty string; existence, status, and id-shape checks live in
 		// runSubmit alongside the rest of the spawn pipeline.
 		existing_seed: { type: "string", minLength: 1 },
+		// labels: optional per-step labels applied to the spawned/adopted child seed
+		// (seeds-7561 / pl-e5a8 step 1). Author-facing strings are normalized
+		// (lowercase, trim, dedup) by runSubmit; the schema only enforces the
+		// pre-normalization shape: an array of non-empty trimmed strings.
+		labels: {
+			type: "array",
+			items: { type: "string", minLength: 1, pattern: "\\S" },
+		},
 	},
 };
 
