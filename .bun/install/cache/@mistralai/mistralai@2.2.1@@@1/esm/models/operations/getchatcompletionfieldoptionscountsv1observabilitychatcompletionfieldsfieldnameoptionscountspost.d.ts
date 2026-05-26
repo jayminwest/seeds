@@ -1,0 +1,15 @@
+import * as z from "zod/v4";
+import * as components from "../components/index.js";
+export type GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest = {
+    fieldName: string;
+    fetchFieldOptionCountsRequest: components.FetchFieldOptionCountsRequest;
+};
+/** @internal */
+export type GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest$Outbound = {
+    field_name: string;
+    FetchFieldOptionCountsRequest: components.FetchFieldOptionCountsRequest$Outbound;
+};
+/** @internal */
+export declare const GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest$outboundSchema: z.ZodType<GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest$Outbound, GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest>;
+export declare function getChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequestToJSON(getChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest: GetChatCompletionFieldOptionsCountsV1ObservabilityChatCompletionFieldsFieldNameOptionsCountsPostRequest): string;
+//# sourceMappingURL=getchatcompletionfieldoptionscountsv1observabilitychatcompletionfieldsfieldnameoptionscountspost.d.ts.map

@@ -1,0 +1,1 @@
+{"version":3,"file":"timestampgranularity.js","sourceRoot":"","sources":["../../../src/models/components/timestampgranularity.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,KAAK,CAAC,MAAM,QAAQ,CAAC;AAG5B,MAAM,CAAC,MAAM,oBAAoB,GAAG;IAClC,OAAO,EAAE,SAAS;IAClB,IAAI,EAAE,MAAM;CACJ,CAAC;AAGX,gBAAgB;AAChB,MAAM,CAAC,MAAM,mCAAmC,GAE5C,CAAC,CAAC,IAAI,CAAC,oBAAoB,CAAC,CAAC"}

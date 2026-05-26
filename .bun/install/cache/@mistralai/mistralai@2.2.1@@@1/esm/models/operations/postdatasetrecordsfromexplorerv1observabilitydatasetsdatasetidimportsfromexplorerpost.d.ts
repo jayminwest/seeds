@@ -1,0 +1,15 @@
+import * as z from "zod/v4";
+import * as components from "../components/index.js";
+export type PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest = {
+    datasetId: string;
+    importDatasetFromExplorerRequest: components.ImportDatasetFromExplorerRequest;
+};
+/** @internal */
+export type PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest$Outbound = {
+    dataset_id: string;
+    ImportDatasetFromExplorerRequest: components.ImportDatasetFromExplorerRequest$Outbound;
+};
+/** @internal */
+export declare const PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest$outboundSchema: z.ZodType<PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest$Outbound, PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest>;
+export declare function postDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequestToJSON(postDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest: PostDatasetRecordsFromExplorerV1ObservabilityDatasetsDatasetIdImportsFromExplorerPostRequest): string;
+//# sourceMappingURL=postdatasetrecordsfromexplorerv1observabilitydatasetsdatasetidimportsfromexplorerpost.d.ts.map

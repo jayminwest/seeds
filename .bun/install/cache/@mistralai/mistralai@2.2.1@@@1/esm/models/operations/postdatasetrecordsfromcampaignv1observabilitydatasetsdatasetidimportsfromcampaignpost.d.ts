@@ -1,0 +1,15 @@
+import * as z from "zod/v4";
+import * as components from "../components/index.js";
+export type PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest = {
+    datasetId: string;
+    importDatasetFromCampaignRequest: components.ImportDatasetFromCampaignRequest;
+};
+/** @internal */
+export type PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest$Outbound = {
+    dataset_id: string;
+    ImportDatasetFromCampaignRequest: components.ImportDatasetFromCampaignRequest$Outbound;
+};
+/** @internal */
+export declare const PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest$outboundSchema: z.ZodType<PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest$Outbound, PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest>;
+export declare function postDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequestToJSON(postDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest: PostDatasetRecordsFromCampaignV1ObservabilityDatasetsDatasetIdImportsFromCampaignPostRequest): string;
+//# sourceMappingURL=postdatasetrecordsfromcampaignv1observabilitydatasetsdatasetidimportsfromcampaignpost.d.ts.map

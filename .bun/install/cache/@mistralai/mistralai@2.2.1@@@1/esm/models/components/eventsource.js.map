@@ -1,0 +1,1 @@
+{"version":3,"file":"eventsource.js","sourceRoot":"","sources":["../../../src/models/components/eventsource.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,KAAK,CAAC,MAAM,QAAQ,CAAC;AAG5B,MAAM,CAAC,MAAM,WAAW,GAAG;IACzB,QAAQ,EAAE,UAAU;IACpB,IAAI,EAAE,MAAM;IACZ,MAAM,EAAE,QAAQ;CACR,CAAC;AAGX,gBAAgB;AAChB,MAAM,CAAC,MAAM,0BAA0B,GAAkC,CAAC,CAAC,IAAI,CAC7E,WAAW,CACZ,CAAC"}

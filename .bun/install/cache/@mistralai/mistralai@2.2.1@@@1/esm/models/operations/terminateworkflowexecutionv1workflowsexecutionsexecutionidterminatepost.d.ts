@@ -1,0 +1,12 @@
+import * as z from "zod/v4";
+export type TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest = {
+    executionId: string;
+};
+/** @internal */
+export type TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest$Outbound = {
+    execution_id: string;
+};
+/** @internal */
+export declare const TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest$outboundSchema: z.ZodType<TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest$Outbound, TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest>;
+export declare function terminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequestToJSON(terminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest: TerminateWorkflowExecutionV1WorkflowsExecutionsExecutionIdTerminatePostRequest): string;
+//# sourceMappingURL=terminateworkflowexecutionv1workflowsexecutionsexecutionidterminatepost.d.ts.map
