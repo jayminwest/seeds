@@ -35,8 +35,8 @@ export function resolveFormat(args: string[]): ResolvedFormat {
 	return { mode: "markdown" };
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape sequences requires the ESC control character
-const ANSI_REGEX = /\[[0-9;]*m/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: \x1b is the ESC byte required to match real ANSI escape sequences
+const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
 
 export function stripAnsi(s: string): string {
 	return s.replace(ANSI_REGEX, "");
