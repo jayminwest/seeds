@@ -92,6 +92,18 @@ describe("sd dep add", () => {
 		expect(show.issue.blockedBy).toContain(id2);
 	});
 
+	test("rejects self-dependency and writes nothing", async () => {
+		const { exitCode, stderr } = await run(["dep", "add", id1, id1], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toMatch(/self-dependency/i);
+		const show = await runJson<{
+			success: boolean;
+			issue: { blockedBy?: string[]; blocks?: string[] };
+		}>(["show", id1], tmpDir);
+		expect(show.issue.blockedBy ?? []).toHaveLength(0);
+		expect(show.issue.blocks ?? []).toHaveLength(0);
+	});
+
 	test("adding duplicate dependency is idempotent", async () => {
 		await run(["dep", "add", id2, id1], tmpDir);
 		await run(["dep", "add", id2, id1], tmpDir);

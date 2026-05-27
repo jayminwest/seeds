@@ -65,6 +65,9 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (!issueId || !dependsOnId) {
 			throw new Error(`Usage: sd dep ${subcmd} <issue> <depends-on>`);
 		}
+		if (subcmd === "add" && issueId === dependsOnId) {
+			throw new Error(`Cannot add a self-dependency: ${issueId}`);
+		}
 
 		await withLock(issuesPath(dir), async () => {
 			const issues = await readIssues(dir);

@@ -18,6 +18,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const issueId = positional[0];
 	if (!issueId) throw new Error("Usage: sd block <id> --by <blocker-id>");
 	if (!blockerId) throw new Error("Usage: sd block <id> --by <blocker-id>");
+	if (issueId === blockerId) throw new Error(`Cannot block an issue by itself: ${issueId}`);
 
 	const dir = seedsDir ?? (await findSeedsDir());
 
