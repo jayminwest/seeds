@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { type Command, Option } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
 import { outputJson, printSuccess } from "../output.ts";
@@ -64,7 +64,13 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		throw new Error("--priority must be 0-4 or P0-P4");
 	}
 
-	const labelsRaw = typeof flags.labels === "string" ? flags.labels : undefined;
+	// --label is a hidden alias for --labels; --labels wins when both are supplied.
+	const labelsRaw =
+		typeof flags.labels === "string"
+			? flags.labels
+			: typeof flags.label === "string"
+				? flags.label
+				: undefined;
 	const labels = labelsRaw
 		? labelsRaw
 				.split(",")
@@ -126,6 +132,7 @@ export function register(program: Command): void {
 		.option("--desc <text>", "Issue description (alias for --description)")
 		.option("--body <text>", "Issue description (alias for --description)")
 		.option("--labels <labels>", "Comma-separated labels")
+		.addOption(new Option("--label <labels>", "Comma-separated labels (alias)").hideHelp())
 		.option("--json", "Output as JSON")
 		.action(
 			async (opts: {
@@ -137,6 +144,7 @@ export function register(program: Command): void {
 				desc?: string;
 				body?: string;
 				labels?: string;
+				label?: string;
 				json?: boolean;
 			}) => {
 				const args: string[] = ["--title", opts.title];
@@ -146,7 +154,9 @@ export function register(program: Command): void {
 				if (opts.description) args.push("--description", opts.description);
 				if (opts.desc) args.push("--desc", opts.desc);
 				if (opts.body) args.push("--body", opts.body);
+				// --labels wins over --label alias when both are supplied.
 				if (opts.labels) args.push("--labels", opts.labels);
+				else if (opts.label) args.push("--labels", opts.label);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},
