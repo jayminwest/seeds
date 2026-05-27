@@ -101,7 +101,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				patch.closeReason = undefined;
 			}
 		}
-		if (typeof flags.title === "string") patch.title = flags.title;
+		if (typeof flags.title === "string") {
+			if (flags.title.trim() === "") {
+				throw new Error("--title must not be empty");
+			}
+			patch.title = flags.title;
+		}
 		if (typeof flags.assignee === "string") patch.assignee = flags.assignee;
 		const desc =
 			typeof flags.description === "string"
@@ -233,7 +238,7 @@ export function register(program: Command): void {
 			) => {
 				const args: string[] = [id];
 				if (opts.status) args.push("--status", opts.status);
-				if (opts.title) args.push("--title", opts.title);
+				if (opts.title !== undefined) args.push("--title", opts.title);
 				if (opts.assignee) args.push("--assignee", opts.assignee);
 				if (opts.description) args.push("--description", opts.description);
 				if (opts.desc) args.push("--desc", opts.desc);

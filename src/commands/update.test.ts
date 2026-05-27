@@ -186,6 +186,24 @@ describe("sd update --status reopen", () => {
 		expect(after.issue.closeReason).toBe("first close");
 	});
 
+	test("rejects empty --title", async () => {
+		const id = await create("keep-title", tmpDir);
+		const { exitCode, stderr } = await run(["update", id, "--title", ""], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--title must not be empty");
+		const after = await runJson<{ issue: { title: string } }>(["show", id], tmpDir);
+		expect(after.issue.title).toBe("keep-title");
+	});
+
+	test("rejects whitespace-only --title", async () => {
+		const id = await create("keep-title-ws", tmpDir);
+		const { exitCode, stderr } = await run(["update", id, "--title", "   "], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--title must not be empty");
+		const after = await runJson<{ issue: { title: string } }>(["show", id], tmpDir);
+		expect(after.issue.title).toBe("keep-title-ws");
+	});
+
 	test("update without --status leaves close metadata untouched on closed issues", async () => {
 		const id = await create("reopen-4", tmpDir);
 		await run(["close", id, "--reason", "done"], tmpDir);
