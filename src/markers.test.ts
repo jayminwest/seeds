@@ -69,5 +69,10 @@ describe("markers", () => {
 		test("returns null when only start marker present", () => {
 			expect(replaceMarkerSection(`${START_MARKER}\nstuff`, "new")).toBeNull();
 		});
+
+		test("returns null when markers are out of order (END before START)", () => {
+			const content = `before\n${END_MARKER}\nbogus\n${START_MARKER}\nafter`;
+			expect(replaceMarkerSection(content, "new")).toBeNull();
+		});
 	});
 });

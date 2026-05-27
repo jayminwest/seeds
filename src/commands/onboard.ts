@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { hasMarkerSection, replaceMarkerSection, wrapInMarkers } from "../markers.ts";
-import { outputJson, printSuccess } from "../output.ts";
+import { outputJson, printError, printSuccess } from "../output.ts";
 import { VERSION } from "../version.ts";
 
 // Schema version drives outdated-snippet detection. Bump when the snippet body changes
@@ -147,18 +147,35 @@ export async function run(args: string[]): Promise<void> {
 
 	if (status === "outdated") {
 		const updated = replaceMarkerSection(content, snippet);
-		if (updated) {
-			await Bun.write(filePath, updated);
+		if (!updated) {
+			// Defensive: detectStatus saw markers but replaceMarkerSection refused
+			// (e.g. markers out of order, truncated, or duplicated). Surface this
+			// instead of silently no-op'ing — agents need to know their snippet is stale.
+			const msg = `Found seeds markers in ${filePath} but could not replace the section (markers may be malformed, out of order, or duplicated). Fix the file manually or remove the seeds:start/seeds:end block and re-run.`;
 			if (jsonMode) {
 				await outputJson({
-					success: true,
+					success: false,
 					command: "onboard",
-					action: "updated",
+					action: "failed",
 					file: filePath,
+					error: msg,
 				});
 			} else {
-				printSuccess(`Updated seeds section in ${filePath}`);
+				printError(msg);
 			}
+			process.exitCode = 1;
+			return;
+		}
+		await Bun.write(filePath, updated);
+		if (jsonMode) {
+			await outputJson({
+				success: true,
+				command: "onboard",
+				action: "updated",
+				file: filePath,
+			});
+		} else {
+			printSuccess(`Updated seeds section in ${filePath}`);
 		}
 		return;
 	}

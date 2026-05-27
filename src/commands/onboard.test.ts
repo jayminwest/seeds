@@ -200,6 +200,35 @@ describe("sd onboard", () => {
 		expect(matches.length).toBe(1);
 	});
 
+	test("surfaces error when markers are out of order (replaceMarkerSection returns null)", async () => {
+		await initSeeds(tmpDir);
+		// Hand-edited broken state: END_MARKER appears before START_MARKER, plus a
+		// legacy version marker so detectStatus returns "outdated" and we hit the
+		// replaceMarkerSection branch.
+		const broken =
+			"# Project\n\n<!-- seeds:end -->\nbogus\n<!-- seeds:start -->\n<!-- seeds-onboard-v:0 -->\n";
+		await Bun.write(join(tmpDir, "CLAUDE.md"), broken);
+		const { exitCode, stderr } = await run(["onboard"], tmpDir);
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("could not replace");
+		// File must remain untouched.
+		const after = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
+		expect(after).toBe(broken);
+	});
+
+	test("surfaces error via --json when markers are out of order", async () => {
+		await initSeeds(tmpDir);
+		const broken =
+			"# Project\n\n<!-- seeds:end -->\nbogus\n<!-- seeds:start -->\n<!-- seeds-onboard-v:0 -->\n";
+		await Bun.write(join(tmpDir, "CLAUDE.md"), broken);
+		const { exitCode, stdout } = await run(["onboard", "--json"], tmpDir);
+		expect(exitCode).toBe(1);
+		const result = JSON.parse(stdout) as { success: boolean; action: string; error: string };
+		expect(result.success).toBe(false);
+		expect(result.action).toBe("failed");
+		expect(result.error).toContain("could not replace");
+	});
+
 	test("schema marker is at version 7 (pi extension removed)", async () => {
 		await initSeeds(tmpDir);
 		await run(["onboard"], tmpDir);
