@@ -2701,6 +2701,28 @@ describe("plan-awareness integration: ready / show / list", () => {
 		expect(parent?.plan_children?.length).toBe(4);
 	});
 
+	test("sd search --json annotates seeds that have plans", async () => {
+		const planSeed = await createSeed(tmpDir, "Searchable plan parent");
+		const planPath = await writePlanFile(tmpDir, validPlanFor());
+		await run(["plan", "submit", planSeed, "--plan", planPath, "--json"], tmpDir);
+
+		const { stdout: jsonOut } = await run(["search", "Searchable", "--json"], tmpDir);
+		const result = JSON.parse(jsonOut) as {
+			issues: Array<{ id: string; plan_status?: string; plan_children?: string[] }>;
+		};
+		const parent = result.issues.find((i) => i.id === planSeed);
+		expect(parent?.plan_status).toBe("approved");
+		expect(parent?.plan_children?.length).toBe(4);
+
+		const plain = await createSeed(tmpDir, "Searchable plain seed");
+		const { stdout: jsonOut2 } = await run(["search", "plain", "--json"], tmpDir);
+		const result2 = JSON.parse(jsonOut2) as {
+			issues: Array<{ id: string; plan_status?: string }>;
+		};
+		const plainEntry = result2.issues.find((i) => i.id === plain);
+		expect(plainEntry?.plan_status).toBeUndefined();
+	});
+
 	test("seeds without plans render exactly as before (regression)", async () => {
 		const seedId = await createSeed(tmpDir, "Plain seed");
 		const { stdout: human } = await run(["list"], tmpDir);

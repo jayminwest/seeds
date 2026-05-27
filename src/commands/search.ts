@@ -8,9 +8,21 @@ import {
 	outputJson,
 	printIssueOneLine,
 } from "../output.ts";
+import { loadPlanContext, planForIssue } from "../plan-context.ts";
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
-import type { Issue } from "../types.ts";
+import type { Issue, Plan } from "../types.ts";
+
+function issueJsonWithPlan(
+	issue: Issue,
+	plan: Plan | undefined,
+): Issue & {
+	plan_status?: string;
+	plan_children?: string[];
+} {
+	if (!plan) return issue;
+	return { ...issue, plan_status: plan.status, plan_children: plan.children };
+}
 
 function parseArgs(args: string[]): {
 	flags: Record<string, string | boolean>;
@@ -93,6 +105,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		allIssues.filter((i: Issue) => i.status === "closed").map((i) => i.id),
 	);
 	let issues = allIssues;
+	const planCtx = await loadPlanContext(dir);
 
 	if (statusFilter) {
 		issues = issues.filter((i: Issue) => i.status === statusFilter);
@@ -117,15 +130,17 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	issues = issues.slice(0, limit);
 
 	switch (fmt.mode) {
-		case "json":
+		case "json": {
+			const issuesWithPlan = issues.map((i) => issueJsonWithPlan(i, planForIssue(planCtx, i)));
 			await outputJson({
 				success: true,
 				command: "search",
 				query,
-				issues,
+				issues: issuesWithPlan,
 				count: issues.length,
 			});
 			return;
+		}
 		case "ids":
 			for (const issue of issues) console.log(issue.id);
 			return;
