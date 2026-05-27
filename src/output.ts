@@ -28,7 +28,8 @@ export function printError(msg: string): void {
 }
 
 export function printWarning(msg: string): void {
-	console.log(`${chalk.yellow("!")} ${msg}`);
+	if (_quiet) return;
+	console.error(`${chalk.yellow("!")} ${msg}`);
 }
 
 // An issue is *effectively* blocked when at least one entry in `blockedBy`

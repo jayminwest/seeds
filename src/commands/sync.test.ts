@@ -45,11 +45,17 @@ describe("sync — worktree guard", () => {
 		const wtDir = join(tmpDir, "wt");
 		git(["worktree", "add", wtDir, "-b", "wt-branch"], mainRepo);
 
-		// Capture console output
+		// Capture console output. printWarning routes to stderr, so capture
+		// both streams and assert the warning lands on stderr.
 		const logs: string[] = [];
+		const errs: string[] = [];
 		const origLog = console.log;
+		const origErr = console.error;
 		console.log = (...args: unknown[]) => {
 			logs.push(args.map(String).join(" "));
+		};
+		console.error = (...args: unknown[]) => {
+			errs.push(args.map(String).join(" "));
 		};
 
 		const origCwd = process.cwd();
@@ -59,9 +65,11 @@ describe("sync — worktree guard", () => {
 		} finally {
 			process.chdir(origCwd);
 			console.log = origLog;
+			console.error = origErr;
 		}
 
-		expect(logs.some((l) => l.includes("worktree"))).toBe(true);
+		expect(errs.some((l) => l.includes("worktree"))).toBe(true);
+		expect(logs.some((l) => l.includes("worktree"))).toBe(false);
 	});
 
 	test("sd sync --json returns worktree: true inside a worktree", async () => {

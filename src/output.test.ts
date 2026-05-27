@@ -1,5 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { formatIssueOneLine, formatIssueOneLineCompact, plain } from "./output.ts";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+	formatIssueOneLine,
+	formatIssueOneLineCompact,
+	plain,
+	printWarning,
+	setQuiet,
+} from "./output.ts";
 import type { Issue } from "./types.ts";
 
 const baseIssue = (overrides: Partial<Issue> = {}): Issue => ({
@@ -39,6 +45,55 @@ describe("formatIssueOneLine", () => {
 	test("no [blocked] tag when blockedBy empty and a closed-set is passed", () => {
 		const out = plain(formatIssueOneLine(baseIssue(), new Set(["x-1"])));
 		expect(out).not.toContain("[blocked]");
+	});
+});
+
+describe("printWarning", () => {
+	afterEach(() => {
+		setQuiet(false);
+	});
+
+	test("writes to stderr, not stdout", () => {
+		const logs: string[] = [];
+		const errs: string[] = [];
+		const origLog = console.log;
+		const origErr = console.error;
+		console.log = (...args: unknown[]) => {
+			logs.push(args.map(String).join(" "));
+		};
+		console.error = (...args: unknown[]) => {
+			errs.push(args.map(String).join(" "));
+		};
+		try {
+			printWarning("heads up");
+		} finally {
+			console.log = origLog;
+			console.error = origErr;
+		}
+		expect(logs).toHaveLength(0);
+		expect(errs.some((l) => l.includes("heads up"))).toBe(true);
+	});
+
+	test("is suppressed when quiet is set", () => {
+		const logs: string[] = [];
+		const errs: string[] = [];
+		const origLog = console.log;
+		const origErr = console.error;
+		console.log = (...args: unknown[]) => {
+			logs.push(args.map(String).join(" "));
+		};
+		console.error = (...args: unknown[]) => {
+			errs.push(args.map(String).join(" "));
+		};
+		try {
+			setQuiet(true);
+			printWarning("silenced");
+		} finally {
+			console.log = origLog;
+			console.error = origErr;
+		}
+		expect(logs).toHaveLength(0);
+		expect(errs).toHaveLength(0);
 	});
 });
 
