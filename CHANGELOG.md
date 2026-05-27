@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-27
+
 ### Added
 - `sd create` accepts `--label <labels>` as a hidden alias for `--labels`, matching the pattern used elsewhere in the CLI. Comma-separated values are supported; the option is omitted from `--help` output to keep the surface clean. (seeds-76cf / plan pl-f4dc)
 
