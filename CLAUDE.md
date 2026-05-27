@@ -261,7 +261,7 @@ sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a s
 
 ### Concurrency
 
-- Advisory file locks (`O_CREAT | O_EXCL`, 30s stale, 50ms retry, 5s timeout)
+- Advisory file locks (`O_CREAT | O_EXCL`, 30s stale, 100ms retry, 30s timeout)
 - Atomic writes (temp file + rename) under lock
 - Creates append under lock; mutations rewrite atomically
 
