@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sd create` accepts `--label <labels>` as a hidden alias for `--labels`, matching the pattern used elsewhere in the CLI. Comma-separated values are supported; the option is omitted from `--help` output to keep the surface clean. (seeds-76cf / plan pl-f4dc)
+
 ## [0.5.2] - 2026-05-27
 
 Nightwatch patrol fixes (plan pl-09b0): a batch of small correctness and consistency fixes discovered during a nightwatch sweep.
