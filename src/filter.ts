@@ -10,6 +10,25 @@ export interface IssueFilterOptions {
 	priorityMax?: number;
 }
 
+/**
+ * Parse a --limit flag value.
+ *
+ * Returns the default when the flag is absent. Throws on negative, fractional,
+ * or non-numeric input. Accepts 0 (callers should treat 0 as "return no rows",
+ * not "use the default").
+ */
+export function parseLimitFlag(raw: unknown, defaultValue = 50): number {
+	if (raw === undefined || raw === null || raw === "") return defaultValue;
+	if (typeof raw !== "string") {
+		throw new Error(`Invalid --limit value: must be a non-negative integer`);
+	}
+	const trimmed = raw.trim();
+	if (!/^\d+$/.test(trimmed)) {
+		throw new Error(`Invalid --limit "${raw}": must be a non-negative integer`);
+	}
+	return Number.parseInt(trimmed, 10);
+}
+
 function splitLabels(value: string): string[] {
 	return value
 		.split(",")

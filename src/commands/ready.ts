@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { applyIssueFilters, filterOptionsFromFlags } from "../filter.ts";
+import { applyIssueFilters, filterOptionsFromFlags, parseLimitFlag } from "../filter.ts";
 import { resolveFormat, stripAnsi, VALID_FORMATS } from "../format.ts";
 import {
 	formatIssueOneLine,
@@ -79,8 +79,19 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		return;
 	}
 	const flags = parseArgs(args);
-	const limitStr = typeof flags.limit === "string" ? flags.limit : "50";
-	const limit = Number.parseInt(limitStr, 10) || 50;
+	let limit: number;
+	try {
+		limit = parseLimitFlag(flags.limit);
+	} catch (e) {
+		const msg = (e as Error).message;
+		if (jsonMode) {
+			await outputJson({ success: false, command: "ready", error: msg });
+		} else {
+			console.error(msg);
+		}
+		process.exitCode = 1;
+		return;
+	}
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const issues = await readIssues(dir);

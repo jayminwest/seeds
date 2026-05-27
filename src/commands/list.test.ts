@@ -315,3 +315,69 @@ describe("sd list/ready priority filters", () => {
 		expect(stderr).toContain("Invalid priority");
 	});
 });
+
+describe("--limit validation", () => {
+	test("sd list --limit 0 returns zero issues (not the default 50)", async () => {
+		await create("a", 2, tmpDir);
+		await create("b", 2, tmpDir);
+		const result = await runJson<{ issues: unknown[]; count: number }>(
+			["list", "--limit", "0"],
+			tmpDir,
+		);
+		expect(result.issues).toHaveLength(0);
+		expect(result.count).toBe(0);
+	});
+
+	test("sd list rejects negative --limit", async () => {
+		await create("a", 2, tmpDir);
+		const { exitCode, stderr } = await run(["list", "--limit", "-1"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --limit");
+	});
+
+	test("sd list rejects non-numeric --limit", async () => {
+		await create("a", 2, tmpDir);
+		const { exitCode, stderr } = await run(["list", "--limit", "abc"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --limit");
+	});
+
+	test("sd list --limit invalid surfaces error in JSON mode", async () => {
+		await create("a", 2, tmpDir);
+		const { stdout, exitCode } = await run(["list", "--limit", "-1", "--json"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+		expect(parsed.success).toBe(false);
+		expect(parsed.error).toContain("Invalid --limit");
+	});
+
+	test("sd ready --limit 0 returns zero issues", async () => {
+		await create("a", 2, tmpDir);
+		const result = await runJson<{ issues: unknown[] }>(["ready", "--limit", "0"], tmpDir);
+		expect(result.issues).toHaveLength(0);
+	});
+
+	test("sd ready rejects negative --limit", async () => {
+		await create("a", 2, tmpDir);
+		const { exitCode, stderr } = await run(["ready", "--limit", "-1"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --limit");
+	});
+
+	test("sd search --limit 0 returns zero issues", async () => {
+		await create("alpha", 2, tmpDir);
+		await create("alphabet", 2, tmpDir);
+		const result = await runJson<{ issues: unknown[] }>(
+			["search", "alpha", "--limit", "0"],
+			tmpDir,
+		);
+		expect(result.issues).toHaveLength(0);
+	});
+
+	test("sd search rejects negative --limit", async () => {
+		await create("alpha", 2, tmpDir);
+		const { exitCode, stderr } = await run(["search", "alpha", "--limit", "-1"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --limit");
+	});
+});
