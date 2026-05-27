@@ -178,6 +178,59 @@ describe("sd create", () => {
 	});
 });
 
+describe("sd create --label alias", () => {
+	test("--label produces same labels as --labels", async () => {
+		const withAlias = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "alias", "--label", "foo,bar"],
+			tmpDir,
+		);
+		const withCanonical = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "canonical", "--labels", "foo,bar"],
+			tmpDir,
+		);
+		const aliasShow = await runJson<{ issue: { labels?: string[] } }>(
+			["show", withAlias.id],
+			tmpDir,
+		);
+		const canonicalShow = await runJson<{ issue: { labels?: string[] } }>(
+			["show", withCanonical.id],
+			tmpDir,
+		);
+		expect(aliasShow.issue.labels).toEqual(["foo", "bar"]);
+		expect(aliasShow.issue.labels).toEqual(canonicalShow.issue.labels);
+	});
+
+	test("--label applies the same trim+lowercase normalization as --labels", async () => {
+		const withAlias = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "alias-norm", "--label", " Foo , BAR ,,baz "],
+			tmpDir,
+		);
+		const withCanonical = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "canon-norm", "--labels", " Foo , BAR ,,baz "],
+			tmpDir,
+		);
+		const aliasShow = await runJson<{ issue: { labels?: string[] } }>(
+			["show", withAlias.id],
+			tmpDir,
+		);
+		const canonicalShow = await runJson<{ issue: { labels?: string[] } }>(
+			["show", withCanonical.id],
+			tmpDir,
+		);
+		expect(aliasShow.issue.labels).toEqual(["foo", "bar", "baz"]);
+		expect(aliasShow.issue.labels).toEqual(canonicalShow.issue.labels);
+	});
+
+	test("--labels wins when both --labels and --label are supplied", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "both", "--labels", "canonical", "--label", "alias"],
+			tmpDir,
+		);
+		const show = await runJson<{ issue: { labels?: string[] } }>(["show", create.id], tmpDir);
+		expect(show.issue.labels).toEqual(["canonical"]);
+	});
+});
+
 describe("sd show", () => {
 	test("returns issue by id", async () => {
 		const create = await runJson<{ success: boolean; id: string }>(

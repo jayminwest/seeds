@@ -88,6 +88,15 @@ describe("sd CLI smoke", () => {
 		expect(stdout).toContain("--timing");
 	});
 
+	test("sd create --help hides the --label alias", async () => {
+		const { stdout, exitCode } = await run(["create", "--help"]);
+		expect(exitCode).toBe(0);
+		// Canonical flag is documented.
+		expect(stdout).toContain("--labels");
+		// Hidden alias must not appear as its own option line.
+		expect(stdout).not.toMatch(/--label\b(?!s)/);
+	});
+
 	test("unknown command exits 1 with a suggestion when close", async () => {
 		const { stderr, exitCode } = await run(["creat"]);
 		expect(exitCode).toBe(1);
