@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-27
+
+Nightwatch patrol fixes (plan pl-09b0): a batch of small correctness and consistency fixes discovered during a nightwatch sweep.
+
+### Fixed
+- `stripAnsi` regex in `src/format.ts` now matches the ESC byte (`\x1b`), so ANSI escape sequences are actually stripped from non-TTY output. (seeds-d6dd)
+- `printWarning` routes to stderr and honors `--quiet`, matching `printError` semantics. Scripts piping stdout no longer see warning noise interleaved with structured output. (seeds-c273)
+- `sd update <id> --title` now rejects empty/whitespace titles instead of silently clearing the field. (seeds-7000)
+- `sd block <id> --by <id>` and `sd dep add <a> <b>` reject self-references with a clear error. (seeds-fd19)
+- `sd onboard` surfaces a descriptive error when `replaceMarkerSection` returns falsy (e.g. an outdated marker block); the previous behavior was a silent no-op. (seeds-206f)
+
+### Changed
+- `sd search --json` annotates results with `plan_status` and `plan_children`, matching `sd list --json` and `sd ready --json`. (seeds-92ef)
+- `sd list|ready|search --limit` validates input — non-integer or non-positive values are rejected up front instead of silently coercing. (seeds-9d2a)
+
+### Docs
+- CLAUDE.md lock-constants section reconciled with the actual values in `src/types.ts` (30s stale, 100ms retry, 30s timeout). (seeds-b1d2)
+
 ## [0.5.1] - 2026-05-26
 
 ### Removed
