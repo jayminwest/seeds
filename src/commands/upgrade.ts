@@ -1,6 +1,5 @@
-import chalk from "chalk";
 import type { Command } from "commander";
-import { outputJson } from "../output.ts";
+import { brand, outputJson, printSuccess, printWarning } from "../output.ts";
 import { VERSION } from "../version.ts";
 
 const PACKAGE_NAME = "@os-eco/seeds-cli";
@@ -25,9 +24,9 @@ export async function run(args: string[]): Promise<void> {
 			await outputJson({ success: true, command: "upgrade", current, latest, upToDate });
 		} else {
 			if (upToDate) {
-				console.log(`${chalk.green("✔")} Already up to date (${current})`);
+				printSuccess(`Already up to date (${current})`);
 			} else {
-				console.log(`${chalk.yellow("!")} Update available: ${current} → ${latest}`);
+				printWarning(`Update available: ${current} → ${latest}`);
 				process.exitCode = 1;
 			}
 		}
@@ -45,13 +44,13 @@ export async function run(args: string[]): Promise<void> {
 				updated: false,
 			});
 		} else {
-			console.log(`${chalk.green("✔")} Already up to date (${current})`);
+			printSuccess(`Already up to date (${current})`);
 		}
 		return;
 	}
 
 	if (!jsonMode) {
-		console.log(`Upgrading ${PACKAGE_NAME} from ${current} to ${latest}...`);
+		console.log(`Upgrading ${brand(PACKAGE_NAME)} from ${current} to ${latest}...`);
 	}
 
 	const result = Bun.spawnSync(["bun", "install", "-g", `${PACKAGE_NAME}@latest`], {
@@ -73,7 +72,7 @@ export async function run(args: string[]): Promise<void> {
 			updated: true,
 		});
 	} else {
-		console.log(`${chalk.green("✔")} Upgraded to ${latest}`);
+		printSuccess(`Upgraded to ${latest}`);
 	}
 }
 
