@@ -8,21 +8,10 @@ import {
 	outputJson,
 	printIssueOneLine,
 } from "../output.ts";
-import { loadPlanContext, planForIssue } from "../plan-context.ts";
+import { issueJsonWithPlan, loadPlanContext, planForIssue } from "../plan-context.ts";
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
-import type { Issue, Plan } from "../types.ts";
-
-function issueJsonWithPlan(
-	issue: Issue,
-	plan: Plan | undefined,
-): Issue & {
-	plan_status?: string;
-	plan_children?: string[];
-} {
-	if (!plan) return issue;
-	return { ...issue, plan_status: plan.status, plan_children: plan.children };
-}
+import type { Issue } from "../types.ts";
 
 function parseArgs(args: string[]): {
 	flags: Record<string, string | boolean>;

@@ -8,10 +8,15 @@ import {
 	outputJson,
 	printIssueOneLine,
 } from "../output.ts";
-import { loadPlanContext, planForIssue, planLineSuffix } from "../plan-context.ts";
+import {
+	issueJsonWithPlan,
+	loadPlanContext,
+	planForIssue,
+	planLineSuffix,
+} from "../plan-context.ts";
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
-import type { Issue, Plan } from "../types.ts";
+import type { Issue } from "../types.ts";
 
 function parseArgs(args: string[]) {
 	const flags: Record<string, string | boolean> = {};
@@ -150,17 +155,6 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			console.log(`\n${issues.length} issue(s)`);
 			return;
 	}
-}
-
-function issueJsonWithPlan(
-	issue: Issue,
-	plan: Plan | undefined,
-): Issue & {
-	plan_status?: string;
-	plan_children?: string[];
-} {
-	if (!plan) return issue;
-	return { ...issue, plan_status: plan.status, plan_children: plan.children };
 }
 
 export function register(program: Command): void {

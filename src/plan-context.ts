@@ -52,6 +52,21 @@ export interface ChildSummary {
 	adopted: boolean;
 }
 
+// Shared --json shape used by list/ready/search/blocked when surfacing an
+// issue that has a plan attached. Returns the issue unchanged when there is
+// no plan, so the JSON payload remains a strict superset (no key churn for
+// plan-less issues).
+export function issueJsonWithPlan(
+	issue: Issue,
+	plan: Plan | undefined,
+): Issue & {
+	plan_status?: string;
+	plan_children?: string[];
+} {
+	if (!plan) return issue;
+	return { ...issue, plan_status: plan.status, plan_children: plan.children };
+}
+
 export function summarisePlanChildren(plan: Plan, issues: Issue[]): ChildSummary[] {
 	const adoptedSet = new Set(plan.adoptedChildren ?? []);
 	return plan.children.map((id) => {

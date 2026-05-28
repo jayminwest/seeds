@@ -10,6 +10,7 @@ import {
 } from "../output.ts";
 import {
 	isPlanDraftBlocking,
+	issueJsonWithPlan,
 	loadPlanContext,
 	planForIssue,
 	planLineSuffix,
@@ -189,17 +190,6 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			console.log(`\n${ready.length} ready issue(s)`);
 			return;
 	}
-}
-
-function issueJsonWithPlan(
-	issue: Issue,
-	plan: Plan | undefined,
-): Issue & {
-	plan_status?: string;
-	plan_children?: string[];
-} {
-	if (!plan) return issue;
-	return { ...issue, plan_status: plan.status, plan_children: plan.children };
 }
 
 export function register(program: Command): void {
