@@ -7,6 +7,7 @@ import {
 	outputJson,
 	printIssueOneLine,
 } from "../output.ts";
+import { issueJsonWithPlan, loadPlanContext, planForIssue } from "../plan-context.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 
@@ -24,6 +25,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 	const dir = seedsDir ?? (await findSeedsDir());
 	const issues = await readIssues(dir);
+	const planCtx = await loadPlanContext(dir);
 
 	const closedIds = new Set(issues.filter((i: Issue) => i.status === "closed").map((i) => i.id));
 
@@ -34,14 +36,16 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	});
 
 	switch (fmt.mode) {
-		case "json":
+		case "json": {
+			const issuesWithPlan = blocked.map((i) => issueJsonWithPlan(i, planForIssue(planCtx, i)));
 			await outputJson({
 				success: true,
 				command: "blocked",
-				issues: blocked,
+				issues: issuesWithPlan,
 				count: blocked.length,
 			});
 			return;
+		}
 		case "ids":
 			for (const issue of blocked) console.log(issue.id);
 			return;

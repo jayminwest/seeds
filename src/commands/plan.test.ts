@@ -2723,6 +2723,32 @@ describe("plan-awareness integration: ready / show / list", () => {
 		expect(plainEntry?.plan_status).toBeUndefined();
 	});
 
+	test("sd blocked --json annotates seeds that have plans", async () => {
+		const blocker = await createSeed(tmpDir, "Blocker for plan parent");
+		const planSeed = await createSeed(tmpDir, "Blocked plan parent");
+		const planPath = await writePlanFile(tmpDir, validPlanFor());
+		await run(["plan", "submit", planSeed, "--plan", planPath, "--json"], tmpDir);
+		await run(["dep", "add", planSeed, blocker], tmpDir);
+
+		const { stdout: jsonOut } = await run(["blocked", "--json"], tmpDir);
+		const result = JSON.parse(jsonOut) as {
+			issues: Array<{ id: string; plan_status?: string; plan_children?: string[] }>;
+		};
+		const parent = result.issues.find((i) => i.id === planSeed);
+		expect(parent?.plan_status).toBe("approved");
+		expect(parent?.plan_children?.length).toBe(4);
+
+		const plainBlocker = await createSeed(tmpDir, "Plain blocker");
+		const plain = await createSeed(tmpDir, "Plain blocked");
+		await run(["dep", "add", plain, plainBlocker], tmpDir);
+		const { stdout: jsonOut2 } = await run(["blocked", "--json"], tmpDir);
+		const result2 = JSON.parse(jsonOut2) as {
+			issues: Array<{ id: string; plan_status?: string }>;
+		};
+		const plainEntry = result2.issues.find((i) => i.id === plain);
+		expect(plainEntry?.plan_status).toBeUndefined();
+	});
+
 	test("seeds without plans render exactly as before (regression)", async () => {
 		const seedId = await createSeed(tmpDir, "Plain seed");
 		const { stdout: human } = await run(["list"], tmpDir);
