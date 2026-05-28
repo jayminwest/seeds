@@ -1,14 +1,9 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { outputJson } from "../output.ts";
+import { VERSION } from "../version.ts";
 
 const PACKAGE_NAME = "@os-eco/seeds-cli";
-
-async function getCurrentVersion(): Promise<string> {
-	const pkgPath = new URL("../../package.json", import.meta.url);
-	const pkg = JSON.parse(await Bun.file(pkgPath).text()) as { version: string };
-	return pkg.version;
-}
 
 async function fetchLatestVersion(): Promise<string> {
 	const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`);
@@ -21,7 +16,8 @@ export async function run(args: string[]): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const checkOnly = args.includes("--check");
 
-	const [current, latest] = await Promise.all([getCurrentVersion(), fetchLatestVersion()]);
+	const current = VERSION;
+	const latest = await fetchLatestVersion();
 	const upToDate = current === latest;
 
 	if (checkOnly) {
