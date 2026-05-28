@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-28
+
+Nightwatch patrol fixes (plan pl-ca00): a second batch of small correctness and consistency fixes from a nightwatch sweep.
+
+### Added
+- `sd blocked --json` annotates results with `plan_status` and `plan_children`, matching `sd list|ready|search --json`. (seeds-5f5c)
+
+### Changed
+- `sd upgrade` reads the current version from the `VERSION` constant in `src/version.ts` instead of re-reading `package.json` at runtime, removing a redundant filesystem lookup. (seeds-a665)
+- `sd upgrade` output now uses the shared `brand` / `printSuccess` / `printWarning` helpers for consistency with the rest of the CLI. (seeds-c9cc)
+- `sd init` appends any missing `merge=union` `.gitattributes` lines per-file instead of skipping the whole block when the file already exists. (seeds-545e)
+
+### Fixed
+- Unknown-command branch in `src/index.ts` now emits a structured JSON error when `--json` is present, instead of human-readable text. (seeds-8aa5)
+
+### Internal
+- Extracted duplicated `issueJsonWithPlan` helper into `src/plan-context.ts` and reused it across `list`, `ready`, `search`, and `blocked` JSON output paths. (seeds-455c)
+
 ## [0.5.3] - 2026-05-27
 
 ### Added
