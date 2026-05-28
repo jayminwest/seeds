@@ -32,4 +32,22 @@ describe("typo suggestions", () => {
 		expect(exitCode).toBe(1);
 		expect(stderr).not.toContain("Did you mean");
 	});
+
+	test("--json emits JSON error to stdout, stderr empty", async () => {
+		const { stdout, stderr, exitCode } = await run(["nosuchcmd", "--json"]);
+		expect(exitCode).toBe(1);
+		expect(stderr).toBe("");
+		const payload = JSON.parse(stdout);
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("nosuchcmd");
+		expect(payload.error).toContain("Unknown command: nosuchcmd");
+	});
+
+	test("--json includes suggestion when within distance", async () => {
+		const { stdout, exitCode } = await run(["creat", "--json"]);
+		expect(exitCode).toBe(1);
+		const payload = JSON.parse(stdout);
+		expect(payload.suggestion).toBe("create");
+		expect(payload.error).toContain("Did you mean create");
+	});
 });

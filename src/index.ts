@@ -159,10 +159,20 @@ async function main(): Promise<void> {
 					best = name;
 				}
 			}
-			if (bestDist <= 2) {
-				process.stderr.write(`Unknown command: ${firstArg}. Did you mean ${best}?\n`);
+			const suggestion = bestDist <= 2 ? best : "";
+			const errMsg = suggestion
+				? `Unknown command: ${firstArg}. Did you mean ${suggestion}?`
+				: `Unknown command: ${firstArg}`;
+			if (jsonMode) {
+				const payload: Record<string, unknown> = {
+					success: false,
+					command: firstArg,
+					error: errMsg,
+				};
+				if (suggestion) payload.suggestion = suggestion;
+				await Bun.write(Bun.stdout, `${JSON.stringify(payload)}\n`);
 			} else {
-				process.stderr.write(`Unknown command: ${firstArg}\n`);
+				process.stderr.write(`${errMsg}\n`);
 			}
 			process.exitCode = 1;
 			return;
