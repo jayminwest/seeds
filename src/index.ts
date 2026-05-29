@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import chalk from "chalk";
 import { Command, Help } from "commander";
+import { handleTopLevelError } from "./error-handler.ts";
 import { brand, muted, setQuiet } from "./output.ts";
 import { VERSION } from "./version.ts";
 
@@ -184,21 +185,4 @@ async function main(): Promise<void> {
 
 const jsonMode = process.argv.includes("--json");
 
-main().catch(async (err: unknown) => {
-	const msg = err instanceof Error ? err.message : String(err);
-	const cmd = process.argv[2];
-	// Route the structured error (with stack) through pino for observability.
-	// Lazy-imported so the happy path never constructs a logger; silent at the
-	// default `info` level and surfaces under SEEDS_DEBUG=1.
-	const { log } = await import("./log.ts");
-	log.debug({ err, cmd }, "command failed");
-	if (jsonMode) {
-		await Bun.write(
-			Bun.stdout,
-			`${JSON.stringify({ success: false, command: cmd, error: msg })}\n`,
-		);
-	} else {
-		console.error(chalk.red(`Error: ${msg}`));
-	}
-	process.exitCode = 1;
-});
+main().catch((err: unknown) => handleTopLevelError(err, { jsonMode, cmd: process.argv[2] }));
