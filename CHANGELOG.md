@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-05-29
+
+Nightwatch patrol fixes (plan pl-b42c): two narrow correctness fixes from a nightwatch sweep.
+
+### Fixed
+- Top-level error handler no longer masks the original failure when the lazy `pino` import throws (e.g. module missing). Extracted to `src/error-handler.ts` with unit coverage for the missing-module path. (seeds-3287)
+- `--json` output is now consistently 2-space indented at every CLI exit point in `src/index.ts` and `src/error-handler.ts`, matching `outputJson()`. (seeds-49dd)
+
 ## [0.5.5] - 2026-05-28
 
 ### Added
