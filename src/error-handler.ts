@@ -38,7 +38,7 @@ export async function handleTopLevelError(
 		// original error below is what the user sees.
 	}
 	if (opts.jsonMode) {
-		const line = `${JSON.stringify({ success: false, command: opts.cmd, error: msg })}\n`;
+		const line = `${JSON.stringify({ success: false, command: opts.cmd, error: msg }, null, 2)}\n`;
 		if (opts.write) {
 			await opts.write(line);
 		} else {

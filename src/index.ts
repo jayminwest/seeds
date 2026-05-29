@@ -138,7 +138,11 @@ async function main(): Promise<void> {
 	if ((rawArgs.includes("-v") || rawArgs.includes("--version")) && rawArgs.includes("--json")) {
 		const platform = `${process.platform}-${process.arch}`;
 		console.log(
-			JSON.stringify({ name: "@os-eco/seeds-cli", version: VERSION, runtime: "bun", platform }),
+			JSON.stringify(
+				{ name: "@os-eco/seeds-cli", version: VERSION, runtime: "bun", platform },
+				null,
+				2,
+			),
 		);
 		process.exitCode = 0;
 		return;
@@ -171,7 +175,7 @@ async function main(): Promise<void> {
 					error: errMsg,
 				};
 				if (suggestion) payload.suggestion = suggestion;
-				await Bun.write(Bun.stdout, `${JSON.stringify(payload)}\n`);
+				await Bun.write(Bun.stdout, `${JSON.stringify(payload, null, 2)}\n`);
 			} else {
 				process.stderr.write(`${errMsg}\n`);
 			}
