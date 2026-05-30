@@ -22,6 +22,7 @@ export async function run(args: string[]): Promise<void> {
 	if (checkOnly) {
 		if (jsonMode) {
 			await outputJson({ success: true, command: "upgrade", current, latest, upToDate });
+			if (!upToDate) process.exitCode = 1;
 		} else {
 			if (upToDate) {
 				printSuccess(`Already up to date (${current})`);
