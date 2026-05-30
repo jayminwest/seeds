@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-05-30
+
+Nightwatch patrol fixes (plan pl-ee1e): four narrow correctness and hygiene fixes from a nightwatch sweep.
+
+### Fixed
+- `sd update --title` now trims whitespace before storing, matching `sd create`. (seeds-dfe7)
+- `sd upgrade --check --json` now exits non-zero when an update is available, matching the non-JSON path. (seeds-15ae)
+
+### Internal
+- Cleaned stale `knip.json` hints — removed gitignored dirs (`dist`, `coverage`, `test-results`), the `.seeds` data dir, no-match `extensions/**/*.ts` patterns, and the redundant `src/index.ts` entry. `bunx knip` now reports zero configuration hints. (seeds-c437)
+- Removed unused exports (`writeConfig`, `isFormatMode`, `formatExtensionsLine`) and types (`DomainSource`, `SectionRequest`, `PlanOutcome`, `ConvoyStatus`) flagged by knip. (seeds-faab)
+
 ## [0.5.6] - 2026-05-29
 
 Nightwatch patrol fixes (plan pl-b42c): two narrow correctness fixes from a nightwatch sweep.
