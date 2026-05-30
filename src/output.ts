@@ -76,7 +76,7 @@ export function printIssueOneLine(issue: Issue, closedBlockerIds?: Set<string>):
 // Each value is JSON-encoded so the rendering round-trips unambiguously
 // (strings stay quoted; objects/arrays/null print as JSON literals).
 // Returns null when extensions is missing or has no own keys.
-export function formatExtensionsLine(ext: Record<string, unknown> | undefined): string | null {
+function formatExtensionsLine(ext: Record<string, unknown> | undefined): string | null {
 	if (!ext) return null;
 	const keys = Object.keys(ext);
 	if (keys.length === 0) return null;

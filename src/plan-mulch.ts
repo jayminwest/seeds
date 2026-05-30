@@ -10,7 +10,7 @@ export interface PriorArtEntry {
 	relevance: number;
 }
 
-export interface SectionRequest {
+interface SectionRequest {
 	name: string;
 	mulchSource?: string;
 }

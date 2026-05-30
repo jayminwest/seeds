@@ -2,7 +2,7 @@ export type FormatMode = "markdown" | "compact" | "plain" | "ids" | "json";
 
 export const VALID_FORMATS: readonly FormatMode[] = ["markdown", "compact", "plain", "ids", "json"];
 
-export function isFormatMode(value: string): value is FormatMode {
+function isFormatMode(value: string): value is FormatMode {
 	return (VALID_FORMATS as readonly string[]).includes(value);
 }
 

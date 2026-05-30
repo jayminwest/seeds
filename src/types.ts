@@ -21,7 +21,7 @@ export interface Issue {
 }
 
 export type PlanStatus = "draft" | "approved" | "active" | "done";
-export type PlanOutcome = "success" | "partial" | "failure";
+type PlanOutcome = "success" | "partial" | "failure";
 
 export interface Plan {
 	id: string;
@@ -87,15 +87,6 @@ export interface PlanTemplate {
 }
 
 export const SECTION_KINDS: readonly SectionKindLiteral[] = ["text", "list", "steps"] as const;
-
-export interface ConvoyStatus {
-	templateId: string;
-	total: number;
-	completed: number;
-	inProgress: number;
-	blocked: number;
-	issues: string[];
-}
 
 export const SEEDS_DIR_NAME = ".seeds";
 export const ISSUES_FILE = "issues.jsonl";

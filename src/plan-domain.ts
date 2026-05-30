@@ -10,7 +10,7 @@ export interface InferDomainOptions {
 	cwd?: string;
 }
 
-export type DomainSource = "explicit" | "labels" | "files" | "none";
+type DomainSource = "explicit" | "labels" | "files" | "none";
 
 export interface InferDomainResult {
 	domain: string | null;
