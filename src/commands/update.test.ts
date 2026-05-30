@@ -204,6 +204,14 @@ describe("sd update --status reopen", () => {
 		expect(after.issue.title).toBe("keep-title-ws");
 	});
 
+	test("trims surrounding whitespace from --title before storing", async () => {
+		const id = await create("untrimmed", tmpDir);
+		const { exitCode } = await run(["update", id, "--title", "  hello  "], tmpDir);
+		expect(exitCode).toBe(0);
+		const after = await runJson<{ issue: { title: string } }>(["show", id], tmpDir);
+		expect(after.issue.title).toBe("hello");
+	});
+
 	test("update without --status leaves close metadata untouched on closed issues", async () => {
 		const id = await create("reopen-4", tmpDir);
 		await run(["close", id, "--reason", "done"], tmpDir);

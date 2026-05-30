@@ -102,10 +102,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			}
 		}
 		if (typeof flags.title === "string") {
-			if (flags.title.trim() === "") {
+			const trimmedTitle = flags.title.trim();
+			if (trimmedTitle === "") {
 				throw new Error("--title must not be empty");
 			}
-			patch.title = flags.title;
+			patch.title = trimmedTitle;
 		}
 		if (typeof flags.assignee === "string") patch.assignee = flags.assignee;
 		const desc =
