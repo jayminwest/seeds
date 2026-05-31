@@ -118,6 +118,7 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 	const origStdoutWrite = process.stdout.write.bind(process.stdout);
 	const origStderrWrite = process.stderr.write.bind(process.stderr);
 	const origBunWrite = Bun.write;
+	const bunWritable = Bun as { write: typeof Bun.write };
 	const origCwd = process.cwd();
 	const origExitCode = process.exitCode;
 	process.exitCode = 0;
@@ -150,8 +151,7 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 	process.stdout.write = makeWrite(stdoutChunks) as typeof process.stdout.write;
 	process.stderr.write = makeWrite(stderrChunks) as typeof process.stderr.write;
 
-	// biome-ignore lint/suspicious/noExplicitAny: intercepting Bun.write signature
-	(Bun as any).write = (dest: unknown, data: unknown, ...rest: unknown[]) => {
+	const writeStub = ((dest: unknown, data: unknown, ...rest: unknown[]) => {
 		if (dest === Bun.stdout) {
 			const text = toText(data);
 			stdoutChunks.push(text);
@@ -162,9 +162,14 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 			stderrChunks.push(text);
 			return Promise.resolve(text.length);
 		}
-		// biome-ignore lint/suspicious/noExplicitAny: passthrough
-		return (origBunWrite as any)(dest, data, ...rest);
-	};
+		const passthrough = origBunWrite as (
+			dest: unknown,
+			data: unknown,
+			...rest: unknown[]
+		) => ReturnType<typeof Bun.write>;
+		return passthrough(dest, data, ...rest);
+	}) as unknown as typeof Bun.write;
+	bunWritable.write = writeStub;
 
 	let thrown: unknown;
 	try {
@@ -204,8 +209,7 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 		console.error = origError;
 		process.stdout.write = origStdoutWrite;
 		process.stderr.write = origStderrWrite;
-		// biome-ignore lint/suspicious/noExplicitAny: restoring original
-		(Bun as any).write = origBunWrite;
+		bunWritable.write = origBunWrite;
 		process.chdir(origCwd);
 	}
 
