@@ -133,6 +133,8 @@ describe("sd plan prompt", () => {
 		const { stdout, exitCode } = await run(["plan", "prompt", seedId, "--json"], tmpDir);
 		expect(exitCode).toBe(0);
 		const parsed = JSON.parse(stdout) as {
+			success: boolean;
+			command: string;
 			plan_request: {
 				seed: string;
 				template: string;
@@ -149,6 +151,8 @@ describe("sd plan prompt", () => {
 				validation: { all_required_present: boolean; min_steps: number; min_acceptance: number };
 			};
 		};
+		expect(parsed.success).toBe(true);
+		expect(parsed.command).toBe("plan prompt");
 		const req = parsed.plan_request;
 		expect(req.seed).toBe(seedId);
 		expect(req.template).toBe("feature");

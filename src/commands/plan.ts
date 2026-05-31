@@ -402,7 +402,11 @@ async function runPrompt(
 	}
 
 	if (jsonMode) {
-		await outputJson({ plan_request: planRequest });
+		await outputJson({
+			success: true,
+			command: "plan prompt",
+			plan_request: planRequest,
+		});
 		return;
 	}
 
