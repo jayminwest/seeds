@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-05-31
+
+Nightwatch patrol fixes (plan pl-b3fe): six narrow correctness, validation, and hygiene fixes from a nightwatch sweep.
+
+### Fixed
+- `sd plan prompt --json` now emits the standard `{success, command, plan_request}` envelope, matching the rest of the `--json` CLI surface. (seeds-1ea2)
+- `sd --version --json` now emits the standard `{success, command, name, version, runtime, platform}` envelope and routes through `Bun.write` like other `--json` exit points. (seeds-fb8e)
+- `sd tpl step add --priority` now validates the value through the shared `parsePriority` helper (accepts `0..4` or `P0..P4`), rejecting `NaN` and out-of-range values before they are persisted onto the template step. (seeds-6c54)
+- `src/store.ts` `acquireLock` stale-claim no longer has a TOCTOU race: the bare `unlinkSync` was replaced with an atomic-rename claim (rename to sidecar, verify ino+mtime, drop or restore) so a stale-lock recovery can never delete another writer's freshly-acquired lock. (seeds-6c64)
+
+### Internal
+- Removed three `as any` casts from `src/test-harness.ts`'s `Bun.write` monkey-patch in favor of a properly typed `bunWritable` view. (seeds-84a3)
+- Added co-located unit tests for the `blocked`, `stats`, `migrate`, `close`, and `plan show` commands using the in-process `runCli` harness. Function coverage 88.89% (floor 87.00%), line coverage 81.37% (floor 80.00%). (seeds-643c)
+
 ## [0.5.7] - 2026-05-30
 
 Nightwatch patrol fixes (plan pl-ee1e): four narrow correctness and hygiene fixes from a nightwatch sweep.
