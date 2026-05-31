@@ -61,11 +61,15 @@ describe("sd CLI smoke", () => {
 		const { stdout, exitCode } = await run(["--version", "--json"]);
 		expect(exitCode).toBe(0);
 		const parsed = JSON.parse(stdout) as {
+			success: boolean;
+			command: string;
 			name: string;
 			version: string;
 			runtime: string;
 			platform: string;
 		};
+		expect(parsed.success).toBe(true);
+		expect(parsed.command).toBe("version");
 		expect(parsed.name).toBe("@os-eco/seeds-cli");
 		expect(parsed.version).toBe(VERSION);
 		expect(parsed.runtime).toBe("bun");

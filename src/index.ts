@@ -2,7 +2,7 @@
 import chalk from "chalk";
 import { Command, Help } from "commander";
 import { handleTopLevelError } from "./error-handler.ts";
-import { brand, muted, setQuiet } from "./output.ts";
+import { brand, muted, outputJson, setQuiet } from "./output.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
@@ -137,13 +137,14 @@ async function main(): Promise<void> {
 	// Handle --version --json before Commander processes the flag
 	if ((rawArgs.includes("-v") || rawArgs.includes("--version")) && rawArgs.includes("--json")) {
 		const platform = `${process.platform}-${process.arch}`;
-		console.log(
-			JSON.stringify(
-				{ name: "@os-eco/seeds-cli", version: VERSION, runtime: "bun", platform },
-				null,
-				2,
-			),
-		);
+		await outputJson({
+			success: true,
+			command: "version",
+			name: "@os-eco/seeds-cli",
+			version: VERSION,
+			runtime: "bun",
+			platform,
+		});
 		process.exitCode = 0;
 		return;
 	}
