@@ -15,6 +15,56 @@ function lockFilePath(dataFilePath: string): string {
 	return `${dataFilePath}.lock`;
 }
 
+function bestEffortUnlink(path: string): void {
+	try {
+		unlinkSync(path);
+	} catch {
+		// best-effort cleanup
+	}
+}
+
+/**
+ * Try to remove a lock entry that looks stale, atomically.
+ *
+ * A bare `unlinkSync(lock)` here would be racy: between our stat and
+ * unlink another process can win `openSync(wx)` for a fresh lock, and our
+ * unlink would then delete their freshly-acquired lock, allowing two
+ * writers.
+ *
+ * Instead, we atomically rename `lock` to a unique sidecar. POSIX rename
+ * is atomic, so at most one concurrent claimant moves the entry; the
+ * others get ENOENT and simply retry the outer loop. After the rename, we
+ * verify the captured file is the same stale inode we observed
+ * (ino + mtime). If it isn't, another claimant has already cycled the
+ * lock — we restore the sidecar atomically so we don't drop their
+ * (now-fresh) lock. We never call `unlinkSync(lock)` directly, so we can
+ * no longer delete a path we don't own.
+ */
+function reclaimStaleLock(lock: string, originalStat: { ino: number; mtimeMs: number }): void {
+	const sidecar = `${lock}.stale.${randomBytes(8).toString("hex")}`;
+	try {
+		renameSync(lock, sidecar);
+	} catch {
+		return; // another claimant won the rename; outer loop retries
+	}
+	let stSidecar: { ino: number; mtimeMs: number };
+	try {
+		stSidecar = statSync(sidecar);
+	} catch {
+		bestEffortUnlink(sidecar);
+		return;
+	}
+	if (stSidecar.ino === originalStat.ino && stSidecar.mtimeMs === originalStat.mtimeMs) {
+		bestEffortUnlink(sidecar);
+		return;
+	}
+	try {
+		renameSync(sidecar, lock);
+	} catch {
+		bestEffortUnlink(sidecar);
+	}
+}
+
 async function acquireLock(dataFilePath: string): Promise<void> {
 	const lock = lockFilePath(dataFilePath);
 	const start = Date.now();
@@ -26,11 +76,10 @@ async function acquireLock(dataFilePath: string): Promise<void> {
 		} catch (err: unknown) {
 			const nodeErr = err as NodeJS.ErrnoException;
 			if (nodeErr.code !== "EEXIST") throw err;
-			// Check if stale
 			try {
 				const st = statSync(lock);
 				if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
-					unlinkSync(lock);
+					reclaimStaleLock(lock, st);
 					continue;
 				}
 			} catch {

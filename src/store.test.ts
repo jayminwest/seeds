@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { closeSync, openSync, readdirSync, utimesSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -304,5 +305,65 @@ describe("withLock", () => {
 		// Lock should be released — another withLock should succeed
 		const result = await withLock(seedsDir, async () => "ok");
 		expect(result).toBe("ok");
+	});
+
+	test("reclaims a stale lock without leaving sidecar files", async () => {
+		// Plant a stale lock file (mtime far in the past, well beyond LOCK_STALE_MS).
+		const lockPath = `${seedsDir}.lock`;
+		closeSync(openSync(lockPath, "w"));
+		const past = new Date(Date.now() - 10 * 60_000);
+		utimesSync(lockPath, past, past);
+
+		const result = await withLock(seedsDir, async () => "claimed");
+		expect(result).toBe("claimed");
+
+		// No .lock and no `.lock.stale.*` sidecars should remain after release.
+		const entries = readdirSync(tmpDir);
+		const leftover = entries.filter(
+			(name) => name.startsWith(".seeds.lock") || name === ".seeds.lock",
+		);
+		expect(leftover).toEqual([]);
+	});
+
+	test("serializes concurrent claimants when a stale lock is present", async () => {
+		// Regression test for the TOCTOU race in acquireLock. Previously, when
+		// multiple processes simultaneously detected a stale lock, each one
+		// would `unlinkSync(lock)` — even after another claimant had already
+		// won `openSync(wx)` for a fresh lock at the same path — allowing two
+		// writers to think they held the lock at once.
+		//
+		// We can't trivially inject an arbitrary inter-process schedule from a
+		// single-process test, but we can verify the invariant the fix
+		// preserves: with a stale lock planted and N parallel claimants, the
+		// critical section is still mutually exclusive and no sidecar files
+		// leak. Under the old code with deliberate contention this assertion
+		// would not hold; under the rename-based atomic claim, it does.
+		const lockPath = `${seedsDir}.lock`;
+		closeSync(openSync(lockPath, "w"));
+		const past = new Date(Date.now() - 10 * 60_000);
+		utimesSync(lockPath, past, past);
+
+		let inside = 0;
+		let maxInside = 0;
+		let completed = 0;
+		await Promise.all(
+			Array.from({ length: 5 }, () =>
+				withLock(seedsDir, async () => {
+					inside++;
+					maxInside = Math.max(maxInside, inside);
+					// Yield to the event loop so any concurrency violation has a
+					// chance to surface in `inside`.
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					inside--;
+					completed++;
+				}),
+			),
+		);
+		expect(completed).toBe(5);
+		expect(maxInside).toBe(1);
+
+		const entries = readdirSync(tmpDir);
+		const leftover = entries.filter((name) => name.includes(".lock"));
+		expect(leftover).toEqual([]);
 	});
 });
