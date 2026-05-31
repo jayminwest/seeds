@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
 import { accent, muted, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
+import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import {
 	appendTemplate,
 	issuesPath,
@@ -95,8 +96,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (!(VALID_TYPES as readonly string[]).includes(typeVal)) {
 			throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
 		}
-		const priorityStr = typeof flags.priority === "string" ? flags.priority : "2";
-		const priority = Number.parseInt(priorityStr, 10);
+		const priority = parsePriority(typeof flags.priority === "string" ? flags.priority : undefined);
+		if (!isValidPriority(priority)) {
+			throw new Error(PRIORITY_ERROR);
+		}
 
 		let stepCount = 0;
 		await withLock(templatesPath(dir), async () => {

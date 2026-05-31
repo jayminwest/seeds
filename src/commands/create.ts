@@ -2,6 +2,7 @@ import { type Command, Option } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
 import { outputJson, printSuccess } from "../output.ts";
+import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import { appendIssue, issuesPath, readIssues, withLock } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
@@ -38,13 +39,6 @@ function parseArgs(args: string[]) {
 	return flags;
 }
 
-function parsePriority(val: string | boolean | undefined, defaultVal = 2): number {
-	if (val === undefined || val === true) return defaultVal;
-	const s = String(val);
-	if (s.toUpperCase().startsWith("P")) return Number.parseInt(s.slice(1), 10);
-	return Number.parseInt(s, 10);
-}
-
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const flags = parseArgs(args);
@@ -60,8 +54,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const issueType = typeVal as Issue["type"];
 
 	const priority = parsePriority(flags.priority);
-	if (Number.isNaN(priority) || priority < 0 || priority > 4) {
-		throw new Error("--priority must be 0-4 or P0-P4");
+	if (!isValidPriority(priority)) {
+		throw new Error(PRIORITY_ERROR);
 	}
 
 	// --label is a hidden alias for --labels; --labels wins when both are supplied.

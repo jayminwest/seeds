@@ -93,6 +93,50 @@ describe("sd tpl step add", () => {
 		expect(step?.priority).toBe(1);
 	});
 
+	test("rejects out-of-range --priority", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["tpl", "create", "--name", "bad-priority-template"],
+			tmpDir,
+		);
+		const high = await run(
+			["tpl", "step", "add", create.id, "--title", "x", "--priority", "5"],
+			tmpDir,
+		);
+		expect(high.exitCode).not.toBe(0);
+		expect(high.stderr).toContain("--priority must be 0-4");
+
+		const neg = await run(
+			["tpl", "step", "add", create.id, "--title", "x", "--priority", "-1"],
+			tmpDir,
+		);
+		expect(neg.exitCode).not.toBe(0);
+
+		const nan = await run(
+			["tpl", "step", "add", create.id, "--title", "x", "--priority", "high"],
+			tmpDir,
+		);
+		expect(nan.exitCode).not.toBe(0);
+
+		// Confirm no bogus step was persisted.
+		const show = await runJson<{ template: { steps: unknown[] } }>(
+			["tpl", "show", create.id],
+			tmpDir,
+		);
+		expect(show.template.steps).toHaveLength(0);
+	});
+
+	test("accepts P-prefixed --priority shorthand", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["tpl", "create", "--name", "p-shorthand-template"],
+			tmpDir,
+		);
+		await run(["tpl", "step", "add", create.id, "--title", "hi", "--priority", "P0"], tmpDir);
+		const show = await runJson<{
+			template: { steps: Array<{ priority?: number }> };
+		}>(["tpl", "show", create.id], tmpDir);
+		expect(show.template.steps[0]?.priority).toBe(0);
+	});
+
 	test("step defaults to type=task priority=2", async () => {
 		const create = await runJson<{ success: boolean; id: string }>(
 			["tpl", "create", "--name", "default-template"],
