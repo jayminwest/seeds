@@ -1,8 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"ignore": [".bun/**"],
-	"ignoreUnresolved": ["bun-types"],
-	"ignoreDependencies": ["pino-pretty"],
 	"workspaces": {
 		".": {
 			"entry": ["scripts/**/*.ts", "**/*.test.ts"],

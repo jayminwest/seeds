@@ -63,11 +63,15 @@ export function createLog(options: CreateLogOptions = {}): Logger {
 	};
 
 	if (pretty && !options.destination) {
-		base.transport = {
-			target: "pino-pretty",
-			options: { colorize: true, translateTime: "SYS:HH:MM:ss.l" },
-		};
-		return pino(base);
+		// Inline `transport` so knip's pino plugin can statically see the
+		// `pino-pretty` target string and not flag it as an unused dep.
+		return pino({
+			...base,
+			transport: {
+				target: "pino-pretty",
+				options: { colorize: true, translateTime: "SYS:HH:MM:ss.l" },
+			},
+		});
 	}
 
 	return options.destination ? pino(base, options.destination) : pino(base);
