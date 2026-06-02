@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-06-02
+
+Nightwatch patrol fixes (plan pl-1496): six narrow correctness, validation, and hygiene fixes from a nightwatch sweep.
+
+### Fixed
+- `src/store.ts` `appendIssue` / `appendTemplate` / `appendPlan` now normalize a missing trailing newline in the JSONL file before appending, preventing a malformed concatenated line when the file was previously written without a final `\n`. Empty-file case still emits no leading newline. (seeds-1b6b)
+- `sd sync` success / no-op / dry-run / status human output now flows through `printSuccess`, emitting the canonical `✓ …` brand line on stdout like every other subcommand. `--json` paths already used `outputJson`; the git-failure path now routes through `handleTopLevelError` for the standard `{success:false, command:'sync', error}` payload. (seeds-b9fa)
+- `sd update --priority` now uses the shared `parsePriority` / `isValidPriority` / `PRIORITY_ERROR` helpers from `src/priority.ts` instead of its own local regex + range check, matching `sd create` and `sd tpl step add`. (seeds-4b6a)
+- Enum validation errors across `src/commands/` and `src/format.ts` now share the same `Invalid --<flag> value: <val>. Valid: a|b|c` shape (replacing the older `--<flag> must be one of: a, b, c (got: <val>)` wording in `plan list`, `plan outcome`, `plan edit`, `update`, `create`, and `tpl`). (seeds-3df8)
+
+### Internal
+- Dropped unused `MIN_PRIORITY` / `MAX_PRIORITY` exports from `src/priority.ts`. (seeds-cee8)
+- Cleaned stale `knip.json` entries by inlining the pino transport object in `src/log.ts` (so knip's pino plugin sees `pino-pretty`) and switching `tsconfig.json` `types` from `bun-types` to `bun`, removing both ignore entries. (seeds-3918)
+
 ## [0.5.8] - 2026-05-31
 
 Nightwatch patrol fixes (plan pl-b3fe): six narrow correctness, validation, and hygiene fixes from a nightwatch sweep.
