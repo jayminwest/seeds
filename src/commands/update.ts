@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { affectedPlanIds, applyPlanTransitions } from "../plan-lifecycle.ts";
+import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import {
 	issuesPath,
 	plansPath,
@@ -44,11 +45,6 @@ function parseArgs(args: string[]) {
 		}
 	}
 	return flags;
-}
-
-function parsePriority(val: string): number {
-	if (val.toUpperCase().startsWith("P")) return Number.parseInt(val.slice(1), 10);
-	return Number.parseInt(val, 10);
 }
 
 // Accept only a JSON object literal (not array, scalar, or null) — extensions
@@ -125,7 +121,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		if (typeof flags.priority === "string") {
 			const p = parsePriority(flags.priority);
-			if (Number.isNaN(p) || p < 0 || p > 4) throw new Error("--priority must be 0-4 or P0-P4");
+			if (!isValidPriority(p)) throw new Error(PRIORITY_ERROR);
 			patch.priority = p;
 		}
 
