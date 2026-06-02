@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir, isInsideWorktree, projectRootFromSeedsDir } from "../config.ts";
-import { outputJson, printWarning } from "../output.ts";
+import { outputJson, printSuccess, printWarning } from "../output.ts";
 import { SEEDS_DIR_NAME } from "../types.ts";
 
 function spawnSync(
@@ -50,10 +50,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			await outputJson({ success: true, command: "sync", hasChanges: !!changed, changes: changed });
 		} else {
 			if (changed) {
-				console.log("Uncommitted .seeds/ changes:");
+				printSuccess("Uncommitted .seeds/ changes:");
 				console.log(changed);
 			} else {
-				console.log("No uncommitted .seeds/ changes.");
+				printSuccess("No uncommitted .seeds/ changes.");
 			}
 		}
 		return;
@@ -68,7 +68,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				message: "Nothing to commit",
 			});
 		} else {
-			console.log("No changes to commit.");
+			printSuccess("No changes to commit.");
 		}
 		return;
 	}
@@ -86,7 +86,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				changes: changed,
 			});
 		} else {
-			console.log("Dry run — would commit:");
+			printSuccess("Dry run — would commit:");
 			console.log(changed);
 			console.log(`Commit message: ${msg}`);
 		}
@@ -110,7 +110,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	if (jsonMode) {
 		await outputJson({ success: true, command: "sync", committed: true, message: msg });
 	} else {
-		console.log(`Committed: ${msg}`);
+		printSuccess(`Committed: ${msg}`);
 	}
 }
 
