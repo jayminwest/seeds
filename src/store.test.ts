@@ -6,14 +6,17 @@ import { join } from "node:path";
 import {
 	appendIssue,
 	appendPlan,
+	appendTemplate,
 	plansPath,
 	readIssues,
 	readPlans,
+	readTemplates,
+	templatesPath,
 	withLock,
 	writeIssues,
 	writePlans,
 } from "./store";
-import type { Issue, Plan } from "./types";
+import type { Issue, Plan, Template } from "./types";
 
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
 	const now = new Date().toISOString();
@@ -141,6 +144,54 @@ describe("appendIssue", () => {
 		expect(lines).toHaveLength(1);
 		expect(JSON.parse(lines[0] ?? "{}")).toEqual(issue);
 	});
+
+	test("appends a newline before the new record when existing file lacks one", async () => {
+		// Simulate an externally-edited issues.jsonl that was saved without a
+		// trailing newline. The next appendIssue() must NOT concatenate the new
+		// record onto the previous line.
+		const issue1 = makeIssue({ id: "test-a1b2" });
+		await Bun.write(join(seedsDir, "issues.jsonl"), JSON.stringify(issue1));
+		const issue2 = makeIssue({ id: "test-c3d4" });
+		await appendIssue(seedsDir, issue2);
+
+		const content = await Bun.file(join(seedsDir, "issues.jsonl")).text();
+		const lines = content.split("\n").filter((l) => l.trim() !== "");
+		expect(lines).toHaveLength(2);
+		expect(content.endsWith("\n")).toBe(true);
+		for (const line of lines) {
+			expect(() => JSON.parse(line)).not.toThrow();
+		}
+		const issues = await readIssues(seedsDir);
+		expect(issues.map((i) => i.id).sort()).toEqual(["test-a1b2", "test-c3d4"]);
+	});
+});
+
+function makeTemplate(overrides: Partial<Template> = {}): Template {
+	return {
+		id: "tpl-aaaa",
+		name: "sample",
+		steps: [],
+		...overrides,
+	};
+}
+
+describe("appendTemplate", () => {
+	test("appends a newline before the new record when existing file lacks one", async () => {
+		const t1 = makeTemplate({ id: "tpl-aaaa" });
+		await Bun.write(templatesPath(seedsDir), JSON.stringify(t1));
+		const t2 = makeTemplate({ id: "tpl-bbbb" });
+		await appendTemplate(seedsDir, t2);
+
+		const content = await Bun.file(templatesPath(seedsDir)).text();
+		const lines = content.split("\n").filter((l) => l.trim() !== "");
+		expect(lines).toHaveLength(2);
+		expect(content.endsWith("\n")).toBe(true);
+		for (const line of lines) {
+			expect(() => JSON.parse(line)).not.toThrow();
+		}
+		const templates = await readTemplates(seedsDir);
+		expect(templates.map((t) => t.id).sort()).toEqual(["tpl-aaaa", "tpl-bbbb"]);
+	});
 });
 
 describe("writeIssues", () => {
@@ -243,6 +294,23 @@ describe("appendPlan", () => {
 		for (const line of lines) {
 			expect(() => JSON.parse(line)).not.toThrow();
 		}
+	});
+
+	test("appends a newline before the new record when existing file lacks one", async () => {
+		const p1 = makePlan({ id: "pl-aaaa" });
+		await Bun.write(plansPath(seedsDir), JSON.stringify(p1));
+		const p2 = makePlan({ id: "pl-bbbb" });
+		await appendPlan(seedsDir, p2);
+
+		const content = await Bun.file(plansPath(seedsDir)).text();
+		const lines = content.split("\n").filter((l) => l.trim() !== "");
+		expect(lines).toHaveLength(2);
+		expect(content.endsWith("\n")).toBe(true);
+		for (const line of lines) {
+			expect(() => JSON.parse(line)).not.toThrow();
+		}
+		const plans = await readPlans(seedsDir);
+		expect(plans.map((p) => p.id).sort()).toEqual(["pl-aaaa", "pl-bbbb"]);
 	});
 });
 

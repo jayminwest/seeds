@@ -156,7 +156,8 @@ export async function appendIssue(seedsDir: string, issue: Issue): Promise<void>
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const file = Bun.file(filePath);
 	const existing = (await file.exists()) ? await file.text() : "";
-	await Bun.write(tmpPath, `${existing + JSON.stringify(issue)}\n`);
+	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
+	await Bun.write(tmpPath, `${prefix}${JSON.stringify(issue)}\n`);
 	renameSync(tmpPath, filePath);
 }
 
@@ -180,7 +181,8 @@ export async function appendTemplate(seedsDir: string, template: Template): Prom
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const file = Bun.file(filePath);
 	const existing = (await file.exists()) ? await file.text() : "";
-	await Bun.write(tmpPath, `${existing + JSON.stringify(template)}\n`);
+	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
+	await Bun.write(tmpPath, `${prefix}${JSON.stringify(template)}\n`);
 	renameSync(tmpPath, filePath);
 }
 
@@ -216,6 +218,7 @@ export async function appendPlan(seedsDir: string, plan: Plan): Promise<void> {
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const file = Bun.file(filePath);
 	const existing = (await file.exists()) ? await file.text() : "";
-	await Bun.write(tmpPath, `${existing + JSON.stringify(plan)}\n`);
+	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
+	await Bun.write(tmpPath, `${prefix}${JSON.stringify(plan)}\n`);
 	renameSync(tmpPath, filePath);
 }
