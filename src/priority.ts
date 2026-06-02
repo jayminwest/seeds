@@ -4,8 +4,8 @@
 // case-insensitive). Returns NaN for unparseable input so callers can produce a
 // uniform error message. The valid range is 0–4 (P0 = highest, P4 = lowest).
 
-export const MIN_PRIORITY = 0;
-export const MAX_PRIORITY = 4;
+const MIN_PRIORITY = 0;
+const MAX_PRIORITY = 4;
 export const PRIORITY_ERROR = "--priority must be 0-4 or P0-P4";
 
 /**
