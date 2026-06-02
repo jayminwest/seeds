@@ -1354,12 +1354,12 @@ const VALID_PLAN_OUTCOMES = new Set(["success", "partial", "failure"]);
 async function runList(filters: ListFilters, jsonMode: boolean): Promise<void> {
 	if (filters.status && !VALID_PLAN_STATUSES.has(filters.status)) {
 		throw new Error(
-			`--status must be one of: ${[...VALID_PLAN_STATUSES].join(", ")} (got: ${filters.status})`,
+			`Invalid --status value: ${filters.status}. Valid: ${[...VALID_PLAN_STATUSES].join("|")}`,
 		);
 	}
 	if (filters.outcome && !VALID_PLAN_OUTCOMES.has(filters.outcome)) {
 		throw new Error(
-			`--outcome must be one of: ${[...VALID_PLAN_OUTCOMES].join(", ")} (got: ${filters.outcome})`,
+			`Invalid --outcome value: ${filters.outcome}. Valid: ${[...VALID_PLAN_OUTCOMES].join("|")}`,
 		);
 	}
 
@@ -1412,7 +1412,7 @@ async function runOutcome(
 	jsonMode: boolean,
 ): Promise<void> {
 	if (!VALID_OUTCOMES.has(result)) {
-		throw new Error(`--result must be one of: ${[...VALID_OUTCOMES].join(", ")} (got: ${result})`);
+		throw new Error(`Invalid --result value: ${result}. Valid: ${[...VALID_OUTCOMES].join("|")}`);
 	}
 	const dir = await findSeedsDir();
 	const planId = await resolvePlanIdArg(idArg, dir);
@@ -2177,7 +2177,7 @@ function parseStepPatch(opts: EditOptions): StepPatch | undefined {
 	if (stepTypeProvided && opts.stepType !== undefined) {
 		const t = opts.stepType;
 		if (!(VALID_TYPES as readonly string[]).includes(t)) {
-			throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
+			throw new Error(`Invalid --type value: ${t}. Valid: ${VALID_TYPES.join("|")}`);
 		}
 		patch.type = t as Issue["type"];
 	}

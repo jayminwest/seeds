@@ -49,7 +49,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 
 	const typeVal = flags.type ?? "task";
 	if (typeof typeVal !== "string" || !(VALID_TYPES as readonly string[]).includes(typeVal)) {
-		throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
+		throw new Error(`Invalid --type value: ${typeVal}. Valid: ${VALID_TYPES.join("|")}`);
 	}
 	const issueType = typeVal as Issue["type"];
 

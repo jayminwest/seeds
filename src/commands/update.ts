@@ -89,7 +89,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (typeof flags.status === "string") {
 			const s = flags.status;
 			if (!(VALID_STATUSES as readonly string[]).includes(s)) {
-				throw new Error(`--status must be one of: ${VALID_STATUSES.join(", ")}`);
+				throw new Error(`Invalid --status value: ${s}. Valid: ${VALID_STATUSES.join("|")}`);
 			}
 			patch.status = s as Issue["status"];
 			// Reopening (status moving away from "closed"): drop stale close metadata
@@ -119,7 +119,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (typeof flags.type === "string") {
 			const t = flags.type;
 			if (!(VALID_TYPES as readonly string[]).includes(t)) {
-				throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
+				throw new Error(`Invalid --type value: ${t}. Valid: ${VALID_TYPES.join("|")}`);
 			}
 			patch.type = t as Issue["type"];
 		}

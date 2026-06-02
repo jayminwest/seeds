@@ -2831,7 +2831,8 @@ describe("sd plan outcome (Phase 5 / PLAN_SPEC.md:393-402)", () => {
 		const planId = await submitPlanFor(seed);
 		const { stderr, exitCode } = await run(["plan", "outcome", planId, "--result", "wat"], tmpDir);
 		expect(exitCode).not.toBe(0);
-		expect(stderr.toLowerCase()).toContain("must be one of");
+		expect(stderr).toContain("Invalid --result value");
+		expect(stderr).toContain("Valid: success|partial|failure");
 	});
 
 	test("warns (does not fail) when children are still open", async () => {

@@ -94,7 +94,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 
 		const typeVal = typeof flags.type === "string" ? flags.type : "task";
 		if (!(VALID_TYPES as readonly string[]).includes(typeVal)) {
-			throw new Error(`--type must be one of: ${VALID_TYPES.join(", ")}`);
+			throw new Error(`Invalid --type value: ${typeVal}. Valid: ${VALID_TYPES.join("|")}`);
 		}
 		const priority = parsePriority(typeof flags.priority === "string" ? flags.priority : undefined);
 		if (!isValidPriority(priority)) {
