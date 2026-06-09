@@ -12,8 +12,8 @@
     "tags": [
       "agent"
     ],
+    "model": "claude-opus-4-7",
     "source": "builtin",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7"
+    "provider": "anthropic"
   }
 }

@@ -381,3 +381,59 @@ describe("--limit validation", () => {
 		expect(stderr).toContain("Invalid --limit");
 	});
 });
+
+describe("sd list -q gates plan suffix branch (seeds-6848)", () => {
+	async function attachPlan(seedId: string, status = "approved"): Promise<void> {
+		const now = new Date().toISOString();
+		const planRow = {
+			id: "pl-test01",
+			seed: seedId,
+			template: "feature",
+			status,
+			revision: 1,
+			sections: {},
+			children: [seedId],
+			createdAt: now,
+			updatedAt: now,
+		};
+		const planPath = join(tmpDir, ".seeds", "plans.jsonl");
+		const existing = (await Bun.file(planPath).exists()) ? await Bun.file(planPath).text() : "";
+		await Bun.write(
+			planPath,
+			`${existing.trim() ? `${existing.trimEnd()}\n` : ""}${JSON.stringify(planRow)}\n`,
+		);
+		const issuesPath = join(tmpDir, ".seeds", "issues.jsonl");
+		const text = await Bun.file(issuesPath).text();
+		const lines = text.split("\n").filter((l) => l.trim());
+		const updated = lines.map((l) => {
+			const obj = JSON.parse(l) as Record<string, unknown> & { id: string };
+			if (obj.id === seedId) obj.plan_id = "pl-test01";
+			return JSON.stringify(obj);
+		});
+		await Bun.write(issuesPath, `${updated.join("\n")}\n`);
+	}
+
+	test("sd list -q suppresses the issue line for seeds carrying plan suffixes", async () => {
+		const id = await create("planned", 2, tmpDir);
+		await attachPlan(id);
+		const { stdout } = await run(["list", "-q"], tmpDir);
+		expect(stdout).not.toContain(id);
+		expect(stdout).not.toContain("[plan approved]");
+	});
+
+	test("sd ready -q suppresses the issue line for seeds carrying plan suffixes", async () => {
+		const id = await create("planned", 2, tmpDir);
+		await attachPlan(id);
+		const { stdout } = await run(["ready", "-q"], tmpDir);
+		expect(stdout).not.toContain(id);
+		expect(stdout).not.toContain("[plan approved]");
+	});
+
+	test("sd list without -q still emits plan suffix", async () => {
+		const id = await create("planned", 2, tmpDir);
+		await attachPlan(id);
+		const { stdout } = await run(["list"], tmpDir);
+		expect(stdout).toContain(id);
+		expect(stdout).toContain("[plan approved]");
+	});
+});

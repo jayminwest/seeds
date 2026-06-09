@@ -67,9 +67,14 @@ export function formatIssueOneLineCompact(issue: Issue, closedBlockerIds?: Set<s
 	return `${issue.id} ${priorityLabel} ${status} ${issue.title}`;
 }
 
-export function printIssueOneLine(issue: Issue, closedBlockerIds?: Set<string>): void {
+export function printIssueOneLine(
+	issue: Issue,
+	closedBlockerIds?: Set<string>,
+	suffix?: string,
+): void {
 	if (_quiet) return;
-	console.log(formatIssueOneLine(issue, closedBlockerIds));
+	const base = formatIssueOneLine(issue, closedBlockerIds);
+	console.log(suffix ? `${base}${suffix}` : base);
 }
 
 // Render Issue.extensions as a single "Extensions: key=value ..." line.

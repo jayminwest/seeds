@@ -146,11 +146,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			for (const issue of issues) {
 				const plan = planForIssue(planCtx, issue);
 				const suffix = planLineSuffix(plan);
-				if (suffix) {
-					process.stdout.write(`${formatIssueOneLine(issue, closedBlockerIds)}${suffix}\n`);
-				} else {
-					printIssueOneLine(issue, closedBlockerIds);
-				}
+				printIssueOneLine(issue, closedBlockerIds, suffix);
 			}
 			console.log(`\n${issues.length} issue(s)`);
 			return;

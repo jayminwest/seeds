@@ -181,11 +181,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			for (const issue of ready) {
 				const { plan } = annotate(issue);
 				const suffix = planLineSuffix(plan);
-				if (suffix) {
-					process.stdout.write(`${formatIssueOneLine(issue, closedIds)}${suffix}\n`);
-				} else {
-					printIssueOneLine(issue, closedIds);
-				}
+				printIssueOneLine(issue, closedIds, suffix);
 			}
 			console.log(`\n${ready.length} ready issue(s)`);
 			return;

@@ -22,6 +22,7 @@
 import { join } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
+import { setQuiet } from "./output.ts";
 
 // Force ANSI off so in-process output matches the subprocess baseline.
 chalk.level = 0;
@@ -124,6 +125,12 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 	process.exitCode = 0;
 	process.chdir(cwd);
 
+	// Mirror src/index.ts: the top-level CLI scans rawArgs for -q/--quiet and
+	// calls setQuiet(true) before dispatching. The harness skips index.ts, so
+	// replicate that pre-dispatch quiet wiring here and restore it on exit.
+	const quietRequested = args.includes("-q") || args.includes("--quiet");
+	if (quietRequested) setQuiet(true);
+
 	console.log = (...a: unknown[]) => {
 		stdoutChunks.push(`${formatConsoleArgs(a)}\n`);
 	};
@@ -211,6 +218,7 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 		process.stderr.write = origStderrWrite;
 		bunWritable.write = origBunWrite;
 		process.chdir(origCwd);
+		if (quietRequested) setQuiet(false);
 	}
 
 	const exitCode = process.exitCode ?? 0;
