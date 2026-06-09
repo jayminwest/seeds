@@ -8,7 +8,12 @@ import {
 	outputJson,
 	printIssueOneLine,
 } from "../output.ts";
-import { issueJsonWithPlan, loadPlanContext, planForIssue } from "../plan-context.ts";
+import {
+	issueJsonWithPlan,
+	loadPlanContext,
+	planForIssue,
+	planLineSuffix,
+} from "../plan-context.ts";
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -152,8 +157,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				console.log(`No issues match "${query}".`);
 				return;
 			}
-			for (const issue of issues)
-				console.log(stripAnsi(formatIssueOneLine(issue, closedBlockerIds)));
+			for (const issue of issues) {
+				const plan = planForIssue(planCtx, issue);
+				console.log(stripAnsi(formatIssueOneLine(issue, closedBlockerIds) + planLineSuffix(plan)));
+			}
 			console.log(`\n${issues.length} match(es)`);
 			return;
 		default:
@@ -161,7 +168,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				console.log(`No issues match "${query}".`);
 				return;
 			}
-			for (const issue of issues) printIssueOneLine(issue, closedBlockerIds);
+			for (const issue of issues) {
+				const plan = planForIssue(planCtx, issue);
+				const suffix = planLineSuffix(plan);
+				printIssueOneLine(issue, closedBlockerIds, suffix);
+			}
 			console.log(`\n${issues.length} match(es)`);
 			return;
 	}

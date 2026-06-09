@@ -188,3 +188,59 @@ describe("sd search", () => {
 		expect(stdout).toContain('No issues match "retry"');
 	});
 });
+
+describe("sd search plan annotation parity (seeds-350d)", () => {
+	async function attachPlan(seedId: string, status = "approved"): Promise<void> {
+		const now = new Date().toISOString();
+		const planRow = {
+			id: "pl-test01",
+			seed: seedId,
+			template: "feature",
+			status,
+			revision: 1,
+			sections: {},
+			children: [seedId],
+			createdAt: now,
+			updatedAt: now,
+		};
+		const planPath = join(tmpDir, ".seeds", "plans.jsonl");
+		const existing = (await Bun.file(planPath).exists()) ? await Bun.file(planPath).text() : "";
+		await Bun.write(
+			planPath,
+			`${existing.trim() ? `${existing.trimEnd()}\n` : ""}${JSON.stringify(planRow)}\n`,
+		);
+		const issuesPath = join(tmpDir, ".seeds", "issues.jsonl");
+		const text = await Bun.file(issuesPath).text();
+		const lines = text.split("\n").filter((l) => l.trim());
+		const updated = lines.map((l) => {
+			const obj = JSON.parse(l) as Record<string, unknown> & { id: string };
+			if (obj.id === seedId) obj.plan_id = "pl-test01";
+			return JSON.stringify(obj);
+		});
+		await Bun.write(issuesPath, `${updated.join("\n")}\n`);
+	}
+
+	test("plain format renders plan suffix for planned seeds", async () => {
+		const id = await create("planned retry", {}, tmpDir);
+		await attachPlan(id);
+		const { stdout, exitCode } = await run(["search", "retry", "--format", "plain"], tmpDir);
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain(id);
+		expect(stdout).toContain("[plan approved]");
+	});
+
+	test("default format renders plan suffix for planned seeds", async () => {
+		const id = await create("planned retry", {}, tmpDir);
+		await attachPlan(id);
+		const { stdout, exitCode } = await run(["search", "retry"], tmpDir);
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain(id);
+		expect(stdout).toContain("[plan approved]");
+	});
+
+	test("no plan suffix when seed has no plan", async () => {
+		await create("plain retry", {}, tmpDir);
+		const { stdout } = await run(["search", "retry", "--format", "plain"], tmpDir);
+		expect(stdout).not.toContain("[plan");
+	});
+});
