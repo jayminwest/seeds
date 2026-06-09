@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-06-09
+
+Nightwatch patrol fixes (plan pl-a847): five narrow correctness, validation, and documentation fixes from a nightwatch sweep.
+
+### Fixed
+- `sd list` and `sd ready` plan-suffix branch in `src/commands/list.ts` and `src/commands/ready.ts` no longer bypass `-q/--quiet`. The suffix-bearing line now routes through `printIssueOneLine` (extended with an optional `suffix` parameter) instead of a bare `process.stdout.write`, so quiet mode suppresses both the plain and plan-annotated forms. (seeds-6848)
+- `sd search` now renders plan annotation suffixes in default and plain output, matching `sd list` and `sd ready`. Previously only `--json` mode emitted plan context; human formats dropped the suffix. (seeds-350d)
+- `src/log.ts` `resolveLevel()` now validates `SEEDS_LOG_LEVEL` against pino's known level names (`trace`/`debug`/`info`/`warn`/`error`/`fatal`/`silent`) instead of a bare cast. Unknown values fall back to the `SEEDS_DEBUG` / `info` default rather than crashing logger init at import time. (seeds-96f0)
+- `src/priority.ts` `parsePriority` / `isValidPriority` now reject fractional input (`2.5`, `P2.5`) and trailing-garbage values (`2a`, ` 2 `) with a strict `/^\d+$/` guard before `Number.parseInt`, matching `src/filter.ts` `parsePriorityToken`. `sd create --priority 2.5` and `sd tpl step add --priority 2.5` now raise `PRIORITY_ERROR`. (seeds-8f1d)
+
+### Internal
+- `src/store.ts` `appendIssue` / `appendTemplate` / `appendPlan` JSDoc now explicitly states that callers must hold `withLock(<correspondingPath>(seedsDir), …)`; these helpers do not acquire the file lock themselves and concurrent writes without the lock can lose data. Documentation-only change. (seeds-5827)
+
 ## [0.5.9] - 2026-06-02
 
 Nightwatch patrol fixes (plan pl-1496): six narrow correctness, validation, and hygiene fixes from a nightwatch sweep.
