@@ -16,8 +16,9 @@ export const PRIORITY_ERROR = "--priority must be 0-4 or P0-P4";
 export function parsePriority(val: string | boolean | undefined, defaultVal = 2): number {
 	if (val === undefined || val === true) return defaultVal;
 	const s = String(val);
-	if (s.toUpperCase().startsWith("P")) return Number.parseInt(s.slice(1), 10);
-	return Number.parseInt(s, 10);
+	const digits = s.toUpperCase().startsWith("P") ? s.slice(1) : s;
+	if (!/^\d+$/.test(digits)) return Number.NaN;
+	return Number.parseInt(digits, 10);
 }
 
 /** True if `p` is a finite integer in the inclusive 0–4 range. */

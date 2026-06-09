@@ -25,6 +25,24 @@ describe("parsePriority", () => {
 		expect(Number.isNaN(parsePriority("high"))).toBe(true);
 		expect(Number.isNaN(parsePriority("Pzz"))).toBe(true);
 	});
+
+	test("rejects fractional input", () => {
+		expect(Number.isNaN(parsePriority("2.5"))).toBe(true);
+		expect(Number.isNaN(parsePriority("P2.5"))).toBe(true);
+		expect(Number.isNaN(parsePriority("p0.0"))).toBe(true);
+	});
+
+	test("rejects trailing/leading garbage that Number.parseInt would silently truncate", () => {
+		expect(Number.isNaN(parsePriority("2a"))).toBe(true);
+		expect(Number.isNaN(parsePriority(" 2 "))).toBe(true);
+		expect(Number.isNaN(parsePriority("P2x"))).toBe(true);
+	});
+
+	test("still accepts valid bare and P-prefixed digits after tightening", () => {
+		expect(parsePriority("2")).toBe(2);
+		expect(parsePriority("P2")).toBe(2);
+		expect(parsePriority("p3")).toBe(3);
+	});
 });
 
 describe("isValidPriority", () => {
