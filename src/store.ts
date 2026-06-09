@@ -151,6 +151,14 @@ export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<vo
 	renameSync(tmpPath, filePath);
 }
 
+/**
+ * Append a single issue to `.seeds/issues.jsonl`.
+ *
+ * Caller must hold `withLock(issuesPath(seedsDir), …)` for the duration of this
+ * call — this helper does NOT acquire the file lock itself. Concurrent writes
+ * without the lock can lose data (read/append/rename is not atomic across
+ * processes on its own).
+ */
 export async function appendIssue(seedsDir: string, issue: Issue): Promise<void> {
 	const filePath = join(seedsDir, ISSUES_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
@@ -176,6 +184,13 @@ export async function writeTemplates(seedsDir: string, templates: Template[]): P
 	renameSync(tmpPath, filePath);
 }
 
+/**
+ * Append a single template to `.seeds/templates.jsonl`.
+ *
+ * Caller must hold `withLock(templatesPath(seedsDir), …)` for the duration of
+ * this call — this helper does NOT acquire the file lock itself. Concurrent
+ * writes without the lock can lose data.
+ */
 export async function appendTemplate(seedsDir: string, template: Template): Promise<void> {
 	const filePath = join(seedsDir, TEMPLATES_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
@@ -213,6 +228,13 @@ export async function writePlans(seedsDir: string, plans: Plan[]): Promise<void>
 	renameSync(tmpPath, filePath);
 }
 
+/**
+ * Append a single plan to `.seeds/plans.jsonl`.
+ *
+ * Caller must hold `withLock(plansPath(seedsDir), …)` for the duration of this
+ * call — this helper does NOT acquire the file lock itself. Concurrent writes
+ * without the lock can lose data.
+ */
 export async function appendPlan(seedsDir: string, plan: Plan): Promise<void> {
 	const filePath = join(seedsDir, PLANS_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
