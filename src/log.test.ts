@@ -87,6 +87,25 @@ describe("createLog level resolution", () => {
 		process.env.SEEDS_LOG_LEVEL = "warn";
 		expect(createLog({ pretty: false }).level).toBe("warn");
 	});
+
+	test("unknown SEEDS_LOG_LEVEL falls back to info without throwing", () => {
+		process.env.SEEDS_LOG_LEVEL = "chatty";
+		expect(() => createLog({ pretty: false })).not.toThrow();
+		expect(createLog({ pretty: false }).level).toBe("info");
+	});
+
+	test("unknown SEEDS_LOG_LEVEL falls back through SEEDS_DEBUG=1 to debug", () => {
+		process.env.SEEDS_LOG_LEVEL = "verbose";
+		process.env.SEEDS_DEBUG = "1";
+		expect(createLog({ pretty: false }).level).toBe("debug");
+	});
+
+	test("each documented pino level is accepted", () => {
+		for (const lvl of ["trace", "debug", "info", "warn", "error", "fatal", "silent"]) {
+			process.env.SEEDS_LOG_LEVEL = lvl;
+			expect(createLog({ pretty: false }).level).toBe(lvl);
+		}
+	});
 });
 
 describe("createLog output format", () => {
