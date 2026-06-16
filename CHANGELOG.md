@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-06-16
+
+Nightwatch patrol fixes (plan pl-a786): two narrow validation and refactor fixes from a nightwatch sweep.
+
+### Fixed
+- `sd list`, `sd search`, and `sd ready` now validate `--status` and `--type` flag values up front, matching the idiom already used by `sd update`. Invalid values exit 1 with `Invalid --<flag> value: X. Valid: a|b|c` on stderr (or a `{success:false, command, error}` envelope under `--json`) instead of silently filtering to an empty result. (seeds-d305)
+
+### Internal
+- `src/index.ts` unknown-command JSON error envelope now routes through `outputJson()` like every other JSON output site, and the top-level `jsonMode` constant is hoisted above `main()` so the closure read inside `main()` and the `.catch()` handler both see a fully initialized binding (no TDZ window). Output is byte-identical. (seeds-e93c)
+
 ## [0.5.11] - 2026-06-16
 
 ### Fixed
