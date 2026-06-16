@@ -244,3 +244,49 @@ describe("sd search plan annotation parity (seeds-350d)", () => {
 		expect(stdout).not.toContain("[plan");
 	});
 });
+
+describe("sd search --status / --type validation", () => {
+	test("rejects invalid --status value (human)", async () => {
+		const { exitCode, stderr } = await run(["search", "foo", "--status", "bogus"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --status value: bogus");
+		expect(stderr).toContain("open|in_progress|closed");
+	});
+
+	test("rejects invalid --status value (--json)", async () => {
+		const { exitCode, stdout } = await run(
+			["search", "foo", "--status", "bogus", "--json"],
+			tmpDir,
+		);
+		expect(exitCode).not.toBe(0);
+		const payload = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("search");
+		expect(payload.error).toContain("Invalid --status value: bogus");
+	});
+
+	test("rejects invalid --type value (human)", async () => {
+		const { exitCode, stderr } = await run(["search", "foo", "--type", "bogus"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --type value: bogus");
+		expect(stderr).toContain("task|bug|feature|epic");
+	});
+
+	test("rejects invalid --type value (--json)", async () => {
+		const { exitCode, stdout } = await run(["search", "foo", "--type", "bogus", "--json"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		const payload = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("search");
+		expect(payload.error).toContain("Invalid --type value: bogus");
+	});
+
+	test("accepts valid --status and --type values", async () => {
+		await create("hello world", { priority: 2 }, tmpDir);
+		const { exitCode } = await run(
+			["search", "hello", "--status", "open", "--type", "task"],
+			tmpDir,
+		);
+		expect(exitCode).toBe(0);
+	});
+});

@@ -208,3 +208,26 @@ describe("sd ready --respect-schedule (pl-c195 step 4)", () => {
 		expect(ids).not.toContain(both);
 	});
 });
+
+describe("sd ready --type validation", () => {
+	test("rejects invalid --type value (human)", async () => {
+		const { exitCode, stderr } = await run(["ready", "--type", "bogus"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --type value: bogus");
+		expect(stderr).toContain("task|bug|feature|epic");
+	});
+
+	test("rejects invalid --type value (--json)", async () => {
+		const { exitCode, stdout } = await run(["ready", "--type", "bogus", "--json"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		const payload = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("ready");
+		expect(payload.error).toContain("Invalid --type value: bogus");
+	});
+
+	test("accepts valid --type value", async () => {
+		const { exitCode } = await run(["ready", "--type", "task"], tmpDir);
+		expect(exitCode).toBe(0);
+	});
+});

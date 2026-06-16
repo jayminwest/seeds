@@ -17,6 +17,7 @@ import {
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
+import { VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
 function parseArgs(args: string[]) {
 	const flags: Record<string, string | boolean> = {};
@@ -65,6 +66,27 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const flags = parseArgs(args);
 
 	const statusFilter = typeof flags.status === "string" ? flags.status : undefined;
+	if (statusFilter && !(VALID_STATUSES as readonly string[]).includes(statusFilter)) {
+		const msg = `Invalid --status value: ${statusFilter}. Valid: ${VALID_STATUSES.join("|")}`;
+		if (jsonMode) {
+			await outputJson({ success: false, command: "list", error: msg });
+		} else {
+			console.error(msg);
+		}
+		process.exitCode = 1;
+		return;
+	}
+	const typeFilter = typeof flags.type === "string" ? flags.type : undefined;
+	if (typeFilter && !(VALID_TYPES as readonly string[]).includes(typeFilter)) {
+		const msg = `Invalid --type value: ${typeFilter}. Valid: ${VALID_TYPES.join("|")}`;
+		if (jsonMode) {
+			await outputJson({ success: false, command: "list", error: msg });
+		} else {
+			console.error(msg);
+		}
+		process.exitCode = 1;
+		return;
+	}
 	const showAll = flags.all === true;
 	let limit: number;
 	try {

@@ -437,3 +437,43 @@ describe("sd list -q gates plan suffix branch (seeds-6848)", () => {
 		expect(stdout).toContain("[plan approved]");
 	});
 });
+
+describe("sd list --status / --type validation", () => {
+	test("rejects invalid --status value (human)", async () => {
+		const { exitCode, stderr } = await run(["list", "--status", "bogus"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --status value: bogus");
+		expect(stderr).toContain("open|in_progress|closed");
+	});
+
+	test("rejects invalid --status value (--json)", async () => {
+		const { exitCode, stdout } = await run(["list", "--status", "bogus", "--json"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		const payload = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("list");
+		expect(payload.error).toContain("Invalid --status value: bogus");
+	});
+
+	test("rejects invalid --type value (human)", async () => {
+		const { exitCode, stderr } = await run(["list", "--type", "bogus"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("Invalid --type value: bogus");
+		expect(stderr).toContain("task|bug|feature|epic");
+	});
+
+	test("rejects invalid --type value (--json)", async () => {
+		const { exitCode, stdout } = await run(["list", "--type", "bogus", "--json"], tmpDir);
+		expect(exitCode).not.toBe(0);
+		const payload = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+		expect(payload.success).toBe(false);
+		expect(payload.command).toBe("list");
+		expect(payload.error).toContain("Invalid --type value: bogus");
+	});
+
+	test("accepts valid --status and --type values", async () => {
+		await create("a", 2, tmpDir);
+		const { exitCode } = await run(["list", "--status", "open", "--type", "task"], tmpDir);
+		expect(exitCode).toBe(0);
+	});
+});

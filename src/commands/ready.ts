@@ -18,6 +18,7 @@ import {
 import { isSortMode, sortIssues, VALID_SORT_MODES } from "../sort.ts";
 import { readIssues } from "../store.ts";
 import type { Issue, Plan } from "../types.ts";
+import { VALID_TYPES } from "../types.ts";
 
 // pl-c195 step 4: opt-in schedule filter. Two well-known extension keys:
 //   extensions.queued === true     → not ready yet (intentionally parked)
@@ -80,6 +81,17 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		return;
 	}
 	const flags = parseArgs(args);
+	const typeFilter = typeof flags.type === "string" ? flags.type : undefined;
+	if (typeFilter && !(VALID_TYPES as readonly string[]).includes(typeFilter)) {
+		const msg = `Invalid --type value: ${typeFilter}. Valid: ${VALID_TYPES.join("|")}`;
+		if (jsonMode) {
+			await outputJson({ success: false, command: "ready", error: msg });
+		} else {
+			console.error(msg);
+		}
+		process.exitCode = 1;
+		return;
+	}
 	let limit: number;
 	try {
 		limit = parseLimitFlag(flags.limit);
