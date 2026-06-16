@@ -2,7 +2,7 @@
 import chalk from "chalk";
 import { Command, Help } from "commander";
 import { handleTopLevelError } from "./error-handler.ts";
-import { brand, muted, outputJson, setQuiet, writeStdout } from "./output.ts";
+import { brand, muted, outputJson, setQuiet } from "./output.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
@@ -27,6 +27,10 @@ const rawArgs = process.argv.slice(2);
 if (rawArgs.includes("--quiet") || rawArgs.includes("-q")) {
 	setQuiet(true);
 }
+
+// Declared above main() so the closure read inside main() and the top-level
+// .catch() handler both see a fully initialized binding (no TDZ window).
+const jsonMode = process.argv.includes("--json");
 
 const program = new Command();
 
@@ -191,7 +195,7 @@ async function main(): Promise<void> {
 					error: errMsg,
 				};
 				if (suggestion) payload.suggestion = suggestion;
-				await writeStdout(`${JSON.stringify(payload, null, 2)}\n`);
+				await outputJson(payload);
 			} else {
 				process.stderr.write(`${errMsg}\n`);
 			}
@@ -202,7 +206,5 @@ async function main(): Promise<void> {
 
 	await program.parseAsync(process.argv);
 }
-
-const jsonMode = process.argv.includes("--json");
 
 main().catch((err: unknown) => handleTopLevelError(err, { jsonMode, cmd: process.argv[2] }));
