@@ -1351,7 +1351,10 @@ interface ListFilters {
 const VALID_PLAN_STATUSES = new Set(["draft", "approved", "active", "done"]);
 const VALID_PLAN_OUTCOMES = new Set(["success", "partial", "failure"]);
 
-async function runList(filters: ListFilters, jsonMode: boolean): Promise<void> {
+// Shared by `sd plan list` and `sd plan ready` (seeds-03f2 / pl-611d step 1).
+// Validates the --status/--outcome enum flags so both commands reject the same
+// bad input with identical messages.
+function validateListFilters(filters: ListFilters): void {
 	if (filters.status && !VALID_PLAN_STATUSES.has(filters.status)) {
 		throw new Error(
 			`Invalid --status value: ${filters.status}. Valid: ${[...VALID_PLAN_STATUSES].join("|")}`,
@@ -1362,20 +1365,28 @@ async function runList(filters: ListFilters, jsonMode: boolean): Promise<void> {
 			`Invalid --outcome value: ${filters.outcome}. Valid: ${[...VALID_PLAN_OUTCOMES].join("|")}`,
 		);
 	}
+}
 
-	const dir = await findSeedsDir();
-	const plans = await readPlans(dir);
-	const filtered = plans
+// Apply the positive passthrough filters (--seed/--status/--outcome/--template)
+// and sort newest-first. Callers may pre-narrow `plans` first (e.g. `sd plan
+// ready` drops status==="done") so this stays a pure positive/exact filter.
+function applyListFilters(plans: Plan[], filters: ListFilters): Plan[] {
+	return plans
 		.filter((p) => (filters.seed ? p.seed === filters.seed : true))
 		.filter((p) => (filters.status ? p.status === filters.status : true))
 		.filter((p) => (filters.outcome ? p.outcome === filters.outcome : true))
 		.filter((p) => (filters.template ? p.template === filters.template : true))
 		.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}
 
+// Render an already-filtered plan list. `command` is the value emitted in the
+// JSON `command` field so `plan list` and `plan ready` keep distinct contracts
+// while sharing byte-identical human + JSON formatting (seeds-03f2).
+async function renderPlanList(filtered: Plan[], command: string, jsonMode: boolean): Promise<void> {
 	if (jsonMode) {
 		await outputJson({
 			success: true,
-			command: "plan list",
+			command,
 			plans: filtered,
 			count: filtered.length,
 		});
@@ -1396,6 +1407,14 @@ async function runList(filters: ListFilters, jsonMode: boolean): Promise<void> {
 			`${accent.bold(p.id)}  ${muted(p.status)}  rev ${p.revision}${namePart}  ${muted(p.template)}  ${muted(`seed=${p.seed}`)}  ${muted(`children=${p.children.length}`)}${outcome}  ${muted(p.createdAt)}`,
 		);
 	}
+}
+
+async function runList(filters: ListFilters, jsonMode: boolean): Promise<void> {
+	validateListFilters(filters);
+	const dir = await findSeedsDir();
+	const plans = await readPlans(dir);
+	const filtered = applyListFilters(plans, filters);
+	await renderPlanList(filtered, "plan list", jsonMode);
 }
 
 function truncateName(value: string, width: number): string {
