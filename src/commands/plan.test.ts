@@ -1851,9 +1851,15 @@ describe("sd plan show: (adopted) marker (seeds-a3ab / pl-43ff)", () => {
 		// Human output: adopted line carries the marker; fresh line does not.
 		const human = await run(["plan", "show", submitResult.plan_id], tmpDir);
 		expect(human.exitCode).toBe(0);
-		const adoptedLine = human.stdout.split("\n").find((l) => l.includes(adoptee));
+		// seeds-5892 surfaces existing_seed as a sub-line in the Steps section, so
+		// the adoptee id now appears on multiple lines; the (adopted) marker is
+		// emitted only on the Children-section row.
+		const adoptedLine = human.stdout
+			.split("\n")
+			.find((l) => l.includes(adoptee) && l.includes("(adopted)"));
 		const freshId = submitResult.children[1] ?? "";
 		const freshLine = human.stdout.split("\n").find((l) => l.includes(freshId));
+		expect(adoptedLine).toBeDefined();
 		expect(adoptedLine).toContain("(adopted)");
 		expect(freshLine).toBeDefined();
 		expect(freshLine).not.toContain("(adopted)");
@@ -1879,7 +1885,10 @@ describe("sd plan show: (adopted) marker (seeds-a3ab / pl-43ff)", () => {
 		await run(["plan", "adopt", planId, adoptee], tmpDir);
 
 		const after = await run(["plan", "show", planId], tmpDir);
-		const line = after.stdout.split("\n").find((l) => l.includes(adoptee));
+		const line = after.stdout
+			.split("\n")
+			.find((l) => l.includes(adoptee) && l.includes("(adopted)"));
+		expect(line).toBeDefined();
 		expect(line).toContain("(adopted)");
 
 		const afterJson = await run(["plan", "show", planId, "--json"], tmpDir);

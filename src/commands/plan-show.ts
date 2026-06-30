@@ -113,8 +113,16 @@ function renderListSection(entries: unknown[], spec: SectionSpec | undefined): v
 }
 
 function renderStepEntry(marker: string, entry: Record<string, unknown>): void {
-	const title = typeof entry.title === "string" ? entry.title : JSON.stringify(entry);
-	console.log(`${marker} ${title}`);
+	// Adoption-only steps (existing_seed without title) used to fall through to
+	// JSON.stringify; surface the existing_seed id as the headline instead so
+	// the human render of an adopted step matches the rest of the list.
+	const hasTitle = typeof entry.title === "string";
+	const headline = hasTitle
+		? (entry.title as string)
+		: typeof entry.existing_seed === "string"
+			? `(adopt ${entry.existing_seed})`
+			: JSON.stringify(entry);
+	console.log(`${marker} ${headline}`);
 	const subIndent = " ".repeat(marker.length + 1);
 	const blocks = entry.blocks;
 	if (Array.isArray(blocks) && blocks.length > 0) {
@@ -129,6 +137,27 @@ function renderStepEntry(marker: string, entry: Record<string, unknown>): void {
 	}
 	if (typeof entry.plan_template === "string" && entry.plan_template.length > 0) {
 		console.log(`${subIndent}${muted(`plan_template: ${entry.plan_template}`)}`);
+	}
+	// STEP_SCHEMA surfaces (seeds-5892): type, priority, labels, existing_seed
+	// are first-class in --json but were previously dropped from the human
+	// render. Emit each as a dim sub-line when present and non-empty.
+	if (typeof entry.type === "string" && entry.type.length > 0) {
+		console.log(`${subIndent}${muted(`type: ${entry.type}`)}`);
+	}
+	if (typeof entry.priority === "number") {
+		console.log(`${subIndent}${muted(`priority: ${entry.priority}`)}`);
+	}
+	const stepLabels = entry.labels;
+	if (Array.isArray(stepLabels) && stepLabels.length > 0) {
+		const rendered = stepLabels
+			.map((l) => (typeof l === "string" ? l : JSON.stringify(l)))
+			.join(", ");
+		console.log(`${subIndent}${muted(`labels: ${rendered}`)}`);
+	}
+	// When existing_seed is the headline we skip the sub-line to avoid the
+	// redundant `(adopt seeds-xxxx)` + `existing_seed: seeds-xxxx` pair.
+	if (hasTitle && typeof entry.existing_seed === "string" && entry.existing_seed.length > 0) {
+		console.log(`${subIndent}${muted(`existing_seed: ${entry.existing_seed}`)}`);
 	}
 }
 
