@@ -8,6 +8,7 @@ import {
 	formatIssueOneLineCompact,
 	muted,
 	outputJson,
+	printError,
 	printIssueFull,
 } from "../output.ts";
 import { loadPlanContext, planForIssue, summarisePlanChildren } from "../plan-context.ts";
@@ -47,7 +48,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "show", error: fmt.error });
 		} else {
-			console.error(fmt.error);
+			printError(fmt.error);
 		}
 		process.exitCode = 1;
 		return;
@@ -80,7 +81,7 @@ async function renderSingle(
 		if (id.startsWith("pl-")) {
 			if (mode !== "markdown" && mode !== "json") {
 				const errMsg = `sd show ${id}: --format ${mode} is not supported for plan ids; pass --json or use 'sd plan show ${id}'`;
-				console.error(errMsg);
+				printError(errMsg);
 				process.exitCode = 1;
 				return;
 			}
@@ -192,7 +193,7 @@ async function renderMultiple(
 		}
 		case "ids": {
 			for (const r of found) console.log(r.issue.id);
-			for (const e of errors) console.error(`✗ ${e.id}: ${e.error}`);
+			for (const e of errors) printError(`${e.id}: ${e.error}`);
 			if (anyMissing) process.exitCode = 1;
 			return;
 		}
@@ -203,7 +204,7 @@ async function renderMultiple(
 			for (const r of found) {
 				console.log(formatIssueOneLineCompact(r.issue, closedBlockerIds));
 			}
-			for (const e of errors) console.error(`✗ ${e.id}: ${e.error}`);
+			for (const e of errors) printError(`${e.id}: ${e.error}`);
 			if (anyMissing) process.exitCode = 1;
 			return;
 		}
@@ -215,7 +216,7 @@ async function renderMultiple(
 				return stripAnsi(formatIssueFull(r.issue) + renderPlanBlock(plan, planChildren));
 			});
 			console.log(blocks.join("\n\n"));
-			for (const e of errors) console.error(`✗ ${e.id}: ${e.error}`);
+			for (const e of errors) printError(`${e.id}: ${e.error}`);
 			if (anyMissing) process.exitCode = 1;
 			return;
 		}
@@ -234,7 +235,7 @@ async function renderMultiple(
 					process.stdout.write(renderPlanBlock(plan, planChildren));
 				}
 			}
-			for (const e of errors) console.error(`✗ ${e.id}: ${e.error}`);
+			for (const e of errors) printError(`${e.id}: ${e.error}`);
 			if (anyMissing) process.exitCode = 1;
 			return;
 		}

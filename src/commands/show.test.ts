@@ -167,5 +167,7 @@ describe("sd show multiple ids", () => {
 		expect(exitCode).not.toBe(0);
 		expect(stdout.trim()).toBe(a);
 		expect(stderr).toContain("seeds-9999");
+		// pl-c94f step 1: per-id errors flow through printError ("✗ " prefix)
+		expect(stderr).toContain("✗ seeds-9999");
 	});
 });

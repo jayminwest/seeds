@@ -215,6 +215,8 @@ describe("sd ready --type validation", () => {
 		expect(exitCode).not.toBe(0);
 		expect(stderr).toContain("Invalid --type value: bogus");
 		expect(stderr).toContain("task|bug|feature|epic");
+		// pl-c94f step 1: validation errors flow through printError ("✗ " prefix)
+		expect(stderr).toMatch(/^✗ /);
 	});
 
 	test("rejects invalid --type value (--json)", async () => {

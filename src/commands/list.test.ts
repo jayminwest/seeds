@@ -444,6 +444,8 @@ describe("sd list --status / --type validation", () => {
 		expect(exitCode).not.toBe(0);
 		expect(stderr).toContain("Invalid --status value: bogus");
 		expect(stderr).toContain("open|in_progress|closed");
+		// pl-c94f step 1: validation errors flow through printError ("✗ " prefix)
+		expect(stderr).toMatch(/^✗ /);
 	});
 
 	test("rejects invalid --status value (--json)", async () => {

@@ -6,6 +6,7 @@ import {
 	formatIssueOneLine,
 	formatIssueOneLineCompact,
 	outputJson,
+	printError,
 	printIssueOneLine,
 } from "../output.ts";
 import {
@@ -58,7 +59,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "list", error: fmt.error });
 		} else {
-			console.error(fmt.error);
+			printError(fmt.error);
 		}
 		process.exitCode = 1;
 		return;
@@ -71,7 +72,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "list", error: msg });
 		} else {
-			console.error(msg);
+			printError(msg);
 		}
 		process.exitCode = 1;
 		return;
@@ -82,7 +83,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "list", error: msg });
 		} else {
-			console.error(msg);
+			printError(msg);
 		}
 		process.exitCode = 1;
 		return;
@@ -96,7 +97,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "list", error: msg });
 		} else {
-			console.error(msg);
+			printError(msg);
 		}
 		process.exitCode = 1;
 		return;
@@ -123,7 +124,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "list", error: msg });
 		} else {
-			console.error(msg);
+			printError(msg);
 		}
 		process.exitCode = 1;
 		return;
