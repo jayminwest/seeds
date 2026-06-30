@@ -15,6 +15,7 @@ import {
 	withLock,
 	writeIssues,
 	writePlans,
+	writeTemplates,
 } from "./store";
 import type { Issue, Plan, Template } from "./types";
 
@@ -213,6 +214,9 @@ describe("writeIssues", () => {
 		await writeIssues(seedsDir, []);
 		const issues = await readIssues(seedsDir);
 		expect(issues).toHaveLength(0);
+		// Byte-exact: empty list rewrite produces '' on disk, not '\n'.
+		const content = await Bun.file(join(seedsDir, "issues.jsonl")).text();
+		expect(content).toBe("");
 	});
 
 	test("each issue serialized to its own line", async () => {
@@ -341,6 +345,21 @@ describe("writePlans", () => {
 		await writePlans(seedsDir, []);
 		const plans = await readPlans(seedsDir);
 		expect(plans).toEqual([]);
+		// Byte-exact: empty list rewrite produces '' on disk, not '\n'.
+		const content = await Bun.file(plansPath(seedsDir)).text();
+		expect(content).toBe("");
+	});
+});
+
+describe("writeTemplates", () => {
+	test("writes empty array as empty file", async () => {
+		await appendTemplate(seedsDir, makeTemplate());
+		await writeTemplates(seedsDir, []);
+		const templates = await readTemplates(seedsDir);
+		expect(templates).toEqual([]);
+		// Byte-exact: empty list rewrite produces '' on disk, not '\n'.
+		const content = await Bun.file(templatesPath(seedsDir)).text();
+		expect(content).toBe("");
 	});
 });
 
