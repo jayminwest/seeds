@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.14] - 2026-06-30
+
+Nightwatch patrol fixes (plan pl-c94f): four small hygiene fixes from a nightwatch sweep.
+
+### Fixed
+- `sd plan show` human render now surfaces `step.type`, `priority`, `labels`, and `existing_seed` as dim sub-lines when present, instead of silently dropping them (they were already in `--json`). Adoption-only steps render as `(adopt <seed>)` rather than falling through to `JSON.stringify`. `--json` output is unchanged. (seeds-5892)
+- `store.ts` write paths (`writeIssues` / `writeTemplates` / `writePlans`) now emit a zero-byte file when rewriting an empty list, instead of a stray single `'\n'` byte. Matches the absent/empty baseline. (seeds-a024)
+
+### Internal
+- Routed inline validation errors through `printError` across `list`, `ready`, `search`, `show`, `stats`, `blocked`, and `completions` so every command's human stderr carries the shared red ✗ prefix. JSON envelopes, exit codes, and message text are unchanged. (seeds-a3e7)
+- Migrated `suggestions` / `timing` / `completions` tests off `Bun.spawn` to in-process `runCli`. Extracted `src/suggestions.ts`, `src/timing.ts`, `src/register-all.ts`, and exported the bash/zsh/fish generators from `src/commands/completions.ts` so the smoke tests can build a fully-populated commander Program without subprocess overhead. (seeds-e294)
+
 ## [0.5.13] - 2026-06-20
 
 ### Fixed
