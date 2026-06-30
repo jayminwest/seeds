@@ -146,7 +146,7 @@ export async function readIssues(seedsDir: string): Promise<Issue[]> {
 export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<void> {
 	const filePath = join(seedsDir, ISSUES_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
+	const content = issues.length === 0 ? "" : `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);
 	renameSync(tmpPath, filePath);
 }
@@ -179,7 +179,8 @@ export async function readTemplates(seedsDir: string): Promise<Template[]> {
 export async function writeTemplates(seedsDir: string, templates: Template[]): Promise<void> {
 	const filePath = join(seedsDir, TEMPLATES_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const content = `${templates.map((t) => JSON.stringify(t)).join("\n")}\n`;
+	const content =
+		templates.length === 0 ? "" : `${templates.map((t) => JSON.stringify(t)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);
 	renameSync(tmpPath, filePath);
 }
@@ -223,7 +224,7 @@ export async function readPlans(seedsDir: string): Promise<Plan[]> {
 export async function writePlans(seedsDir: string, plans: Plan[]): Promise<void> {
 	const filePath = join(seedsDir, PLANS_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const content = `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`;
+	const content = plans.length === 0 ? "" : `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);
 	renameSync(tmpPath, filePath);
 }
