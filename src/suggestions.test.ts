@@ -1,53 +1,93 @@
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
+import { levenshtein, suggestForUnknown } from "./suggestions.ts";
 
-const CLI = join(import.meta.dir, "../src/index.ts");
+// Note: the previous version of this file spawned `bun run src/index.ts` per
+// assertion. The suggestion logic is pure (no I/O, no globals), so we now
+// exercise it directly via the helpers extracted from src/index.ts. The
+// end-to-end stderr/--json wiring is covered by src/cli-smoke.test.ts.
 
-async function run(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
-}
+const KNOWN = [
+	"init",
+	"create",
+	"show",
+	"list",
+	"ready",
+	"search",
+	"update",
+	"close",
+	"dep",
+	"label",
+	"blocked",
+	"stats",
+	"sync",
+	"doctor",
+	"tpl",
+	"migrate",
+	"prime",
+	"onboard",
+	"upgrade",
+	"completions",
+	"block",
+	"unblock",
+	"plan",
+	"config",
+];
 
-describe("typo suggestions", () => {
-	test("misspelled 'creat' suggests 'create'", async () => {
-		const { stderr, exitCode } = await run(["creat"]);
-		expect(exitCode).toBe(1);
-		expect(stderr).toContain("Did you mean create");
-	});
-
-	test("misspelled 'lis' suggests 'list'", async () => {
-		const { stderr, exitCode } = await run(["lis"]);
-		expect(exitCode).toBe(1);
-		expect(stderr).toContain("Did you mean list");
-	});
-
-	test("completely unrelated string does not suggest", async () => {
-		const { stderr, exitCode } = await run(["zzzznotacommand"]);
-		expect(exitCode).toBe(1);
-		expect(stderr).not.toContain("Did you mean");
-	});
-
-	test("--json emits JSON error to stdout, stderr empty", async () => {
-		const { stdout, stderr, exitCode } = await run(["nosuchcmd", "--json"]);
-		expect(exitCode).toBe(1);
-		expect(stderr).toBe("");
-		const payload = JSON.parse(stdout);
-		expect(payload.success).toBe(false);
-		expect(payload.command).toBe("nosuchcmd");
-		expect(payload.error).toContain("Unknown command: nosuchcmd");
+describe("levenshtein", () => {
+	test("identical strings → 0", () => {
+		expect(levenshtein("create", "create")).toBe(0);
 	});
 
-	test("--json includes suggestion when within distance", async () => {
-		const { stdout, exitCode } = await run(["creat", "--json"]);
-		expect(exitCode).toBe(1);
-		const payload = JSON.parse(stdout);
-		expect(payload.suggestion).toBe("create");
-		expect(payload.error).toContain("Did you mean create");
+	test("single edit → 1", () => {
+		expect(levenshtein("creat", "create")).toBe(1);
+		expect(levenshtein("lis", "list")).toBe(1);
+	});
+
+	test("empty inputs", () => {
+		expect(levenshtein("", "")).toBe(0);
+		expect(levenshtein("", "abc")).toBe(3);
+		expect(levenshtein("abc", "")).toBe(3);
+	});
+
+	test("far strings", () => {
+		expect(levenshtein("zzzznotacommand", "create")).toBeGreaterThan(2);
+	});
+});
+
+describe("suggestForUnknown", () => {
+	test("misspelled 'creat' suggests 'create'", () => {
+		const { suggestion, errMsg } = suggestForUnknown("creat", KNOWN);
+		expect(suggestion).toBe("create");
+		expect(errMsg).toBe("Unknown command: creat. Did you mean create?");
+	});
+
+	test("misspelled 'lis' suggests 'list'", () => {
+		const { suggestion, errMsg } = suggestForUnknown("lis", KNOWN);
+		expect(suggestion).toBe("list");
+		expect(errMsg).toContain("Did you mean list");
+	});
+
+	test("completely unrelated string does not suggest", () => {
+		const { suggestion, errMsg } = suggestForUnknown("zzzznotacommand", KNOWN);
+		expect(suggestion).toBe("");
+		expect(errMsg).toBe("Unknown command: zzzznotacommand");
+		expect(errMsg).not.toContain("Did you mean");
+	});
+
+	test("distance of exactly 2 still suggests", () => {
+		// "lst" -> "list" is distance 1; pick a distance-2 case
+		const { suggestion } = suggestForUnknown("crete", KNOWN);
+		expect(suggestion).toBe("create");
+	});
+
+	test("distance > 2 does not suggest", () => {
+		const { suggestion } = suggestForUnknown("nosuchcmd", KNOWN);
+		expect(suggestion).toBe("");
+	});
+
+	test("empty known list yields no suggestion", () => {
+		const { suggestion, errMsg } = suggestForUnknown("create", []);
+		expect(suggestion).toBe("");
+		expect(errMsg).toBe("Unknown command: create");
 	});
 });

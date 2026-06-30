@@ -1,65 +1,74 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Command } from "commander";
+import { registerAll } from "../register-all.ts";
+import { runCli } from "../test-harness.ts";
+import { generateBash, generateFish, generateZsh } from "./completions.ts";
 
-// sd completions tests intentionally run via subprocess: the generated
-// completion script enumerates the full top-level commander program, so we
-// need the real `bun run src/index.ts` entrypoint with every command
-// registered. Running through the in-process harness would only see the
-// single registered command and produce a stub script.
-const CLI = join(import.meta.dir, "../../src/index.ts");
+// Previously this file spawned `bun run src/index.ts completions <shell>` to
+// see every registered command. We now build a fully-populated Program
+// in-process via registerAll() and call the exported generators directly.
+// Validation-error paths (unknown shell, missing argument) are still
+// exercised through the in-process runCli harness so the printError ✗-prefix
+// contract is enforced.
 
-async function run(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
-}
+let fullProgram: Command;
 
-describe("sd completions", () => {
-	test("bash output contains complete -F", async () => {
-		const { stdout, exitCode } = await run(["completions", "bash"]);
-		expect(exitCode).toBe(0);
-		expect(stdout).toContain("complete -F");
-		expect(stdout).toContain("_sd_completions");
-	});
+beforeAll(async () => {
+	fullProgram = new Command();
+	await registerAll(fullProgram);
+});
 
-	test("zsh output contains #compdef sd", async () => {
-		const { stdout, exitCode } = await run(["completions", "zsh"]);
-		expect(exitCode).toBe(0);
-		expect(stdout).toContain("#compdef sd");
-		expect(stdout).toContain("_sd");
+describe("sd completions (script generators)", () => {
+	test("bash output contains complete -F", () => {
+		const out = generateBash(fullProgram);
+		expect(out).toContain("complete -F");
+		expect(out).toContain("_sd_completions");
 	});
 
-	test("fish output contains complete -c sd", async () => {
-		const { stdout, exitCode } = await run(["completions", "fish"]);
-		expect(exitCode).toBe(0);
-		expect(stdout).toContain("complete -c sd");
+	test("zsh output contains #compdef sd", () => {
+		const out = generateZsh(fullProgram);
+		expect(out).toContain("#compdef sd");
+		expect(out).toContain("_sd");
 	});
 
-	test("output includes known commands", async () => {
-		const { stdout } = await run(["completions", "bash"]);
-		expect(stdout).toContain("create");
-		expect(stdout).toContain("list");
-		expect(stdout).toContain("stats");
+	test("fish output contains complete -c sd", () => {
+		const out = generateFish(fullProgram);
+		expect(out).toContain("complete -c sd");
 	});
 
-	test("output includes subcommands for dep and tpl", async () => {
-		const { stdout } = await run(["completions", "bash"]);
-		expect(stdout).toContain("dep");
-		expect(stdout).toContain("tpl");
+	test("output includes known commands", () => {
+		const out = generateBash(fullProgram);
+		expect(out).toContain("create");
+		expect(out).toContain("list");
+		expect(out).toContain("stats");
+	});
+
+	test("output includes subcommands for dep and tpl", () => {
+		const out = generateBash(fullProgram);
+		expect(out).toContain("dep");
+		expect(out).toContain("tpl");
 		// dep subcommands
-		expect(stdout).toContain("add");
-		expect(stdout).toContain("remove");
+		expect(out).toContain("add");
+		expect(out).toContain("remove");
 		// tpl subcommands
-		expect(stdout).toContain("pour");
+		expect(out).toContain("pour");
+	});
+});
+
+describe("sd completions (CLI validation)", () => {
+	let tmpDir: string;
+
+	beforeAll(async () => {
+		// runCli chdirs into the working dir; give it a real temp dir even
+		// though `completions` itself doesn't touch the filesystem.
+		tmpDir = await mkdtemp(join(tmpdir(), "seeds-completions-"));
 	});
 
-	test("unknown shell exits non-zero", async () => {
-		const { exitCode, stderr } = await run(["completions", "powershell"]);
+	test("unknown shell exits non-zero with printError ✗ prefix", async () => {
+		const { exitCode, stderr } = await runCli(["completions", "powershell"], tmpDir);
 		expect(exitCode).toBe(1);
 		expect(stderr).toContain("Unknown shell");
 		// pl-c94f step 1: validation errors flow through printError ("✗ " prefix)
@@ -67,7 +76,11 @@ describe("sd completions", () => {
 	});
 
 	test("missing argument exits non-zero", async () => {
-		const { exitCode } = await run(["completions"]);
+		const { exitCode } = await runCli(["completions"], tmpDir);
 		expect(exitCode).not.toBe(0);
+	});
+
+	afterAll(async () => {
+		await rm(tmpDir, { recursive: true, force: true });
 	});
 });

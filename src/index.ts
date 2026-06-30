@@ -3,6 +3,9 @@ import chalk from "chalk";
 import { Command, Help } from "commander";
 import { handleTopLevelError } from "./error-handler.ts";
 import { brand, muted, outputJson, setQuiet } from "./output.ts";
+import { registerAll } from "./register-all.ts";
+import { suggestForUnknown } from "./suggestions.ts";
+import { installTimingHook } from "./timing.ts";
 import { VERSION } from "./version.ts";
 
 export { VERSION };
@@ -83,74 +86,7 @@ program
 	});
 
 // --timing: measure command execution time
-let timingStart = 0;
-program.hook("preAction", () => {
-	if (program.opts().timing) {
-		timingStart = performance.now();
-	}
-});
-program.hook("postAction", () => {
-	if (program.opts().timing) {
-		const elapsed = performance.now() - timingStart;
-		const formatted =
-			elapsed < 1000 ? `${Math.round(elapsed)}ms` : `${(elapsed / 1000).toFixed(2)}s`;
-		process.stderr.write(`${muted(`⏱ ${formatted}`)}\n`);
-	}
-});
-
-// Lazy-load and register all commands
-async function registerAll(): Promise<void> {
-	const mods = await Promise.all([
-		import("./commands/init.ts"),
-		import("./commands/create.ts"),
-		import("./commands/show.ts"),
-		import("./commands/list.ts"),
-		import("./commands/ready.ts"),
-		import("./commands/search.ts"),
-		import("./commands/update.ts"),
-		import("./commands/close.ts"),
-		import("./commands/dep.ts"),
-		import("./commands/label.ts"),
-		import("./commands/blocked.ts"),
-		import("./commands/stats.ts"),
-		import("./commands/sync.ts"),
-		import("./commands/doctor.ts"),
-		import("./commands/tpl.ts"),
-		import("./commands/migrate.ts"),
-		import("./commands/prime.ts"),
-		import("./commands/onboard.ts"),
-		import("./commands/upgrade.ts"),
-		import("./commands/completions.ts"),
-		import("./commands/block.ts"),
-		import("./commands/unblock.ts"),
-		import("./commands/plan.ts"),
-		import("./commands/config.ts"),
-	]);
-
-	for (const mod of mods) {
-		mod.register(program);
-	}
-}
-
-function levenshtein(a: string, b: string): number {
-	const m = a.length;
-	const n = b.length;
-	if (m === 0) return n;
-	if (n === 0) return m;
-	let prev: number[] = Array.from({ length: n + 1 }, (_, j) => j);
-	for (let i = 1; i <= m; i++) {
-		const curr: number[] = [i];
-		for (let j = 1; j <= n; j++) {
-			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-			const left = curr[j - 1] ?? 0;
-			const up = prev[j] ?? 0;
-			const diag = prev[j - 1] ?? 0;
-			curr.push(Math.min(left + 1, up + 1, diag + cost));
-		}
-		prev = curr;
-	}
-	return prev[n] ?? 0;
-}
+installTimingHook(program);
 
 async function main(): Promise<void> {
 	// Handle --version --json before Commander processes the flag
@@ -168,26 +104,14 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	await registerAll();
+	await registerAll(program);
 
 	// Check for unknown commands before parsing
 	const firstArg = process.argv[2];
 	if (firstArg && !firstArg.startsWith("-")) {
 		const knownNames = program.commands.map((c) => c.name());
 		if (!knownNames.includes(firstArg)) {
-			let best = "";
-			let bestDist = Number.POSITIVE_INFINITY;
-			for (const name of knownNames) {
-				const d = levenshtein(firstArg, name);
-				if (d < bestDist) {
-					bestDist = d;
-					best = name;
-				}
-			}
-			const suggestion = bestDist <= 2 ? best : "";
-			const errMsg = suggestion
-				? `Unknown command: ${firstArg}. Did you mean ${suggestion}?`
-				: `Unknown command: ${firstArg}`;
+			const { suggestion, errMsg } = suggestForUnknown(firstArg, knownNames);
 			if (jsonMode) {
 				const payload: Record<string, unknown> = {
 					success: false,

@@ -34,7 +34,7 @@ function collectCommands(program: Command): CmdInfo[] {
 	return result;
 }
 
-function generateBash(program: Command): string {
+export function generateBash(program: Command): string {
 	const cmds = collectCommands(program);
 	const cmdNames = cmds.map((c) => c.name).join(" ");
 
@@ -77,7 +77,7 @@ complete -F _sd_completions sd
 `;
 }
 
-function generateZsh(program: Command): string {
+export function generateZsh(program: Command): string {
 	const cmds = collectCommands(program);
 
 	const cmdDescLines = cmds.map(
@@ -133,7 +133,7 @@ _sd "$@"
 `;
 }
 
-function generateFish(program: Command): string {
+export function generateFish(program: Command): string {
 	const cmds = collectCommands(program);
 	const lines: string[] = ["# fish completions for sd"];
 
