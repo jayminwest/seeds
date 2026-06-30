@@ -99,6 +99,57 @@ describe("sd plan show", () => {
 		expect(stdout).toMatch(/Children \(\d+\)/);
 	});
 
+	test("human render surfaces type, priority, labels, existing_seed for steps (seeds-5892)", async () => {
+		const seedId = await createSeed("Plan parent", tmpDir);
+		const adopted = await createSeed("Pre-existing seed", tmpDir);
+		const plan = {
+			template: "feature",
+			sections: {
+				context: VALID_CONTEXT,
+				approach: "Step rendering coverage.",
+				alternatives: [],
+				steps: [
+					{
+						title: "Spawn step",
+						type: "bug",
+						priority: 0,
+						labels: ["docs", "hygiene"],
+						blocks: [],
+					},
+					{ existing_seed: adopted, blocks: [] },
+				],
+				risks: [],
+				acceptance: ["Done"],
+			},
+		};
+		const planPath = join(tmpDir, "plan.json");
+		await Bun.write(planPath, JSON.stringify(plan));
+		const submitOut = await runJson<{ plan_id: string }>(
+			["plan", "submit", seedId, "--plan", planPath],
+			tmpDir,
+		);
+		const { stdout, exitCode } = await run(["plan", "show", submitOut.plan_id], tmpDir);
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain("Spawn step");
+		expect(stdout).toContain("type: bug");
+		expect(stdout).toContain("priority: 0");
+		expect(stdout).toContain("labels: docs, hygiene");
+		// Adoption-only step: existing_seed becomes the headline.
+		expect(stdout).toContain(`(adopt ${adopted})`);
+	});
+
+	test("--json output preserves step fields (seeds-5892)", async () => {
+		const seedId = await createSeed("Plan parent", tmpDir);
+		const planId = await submitPlan(tmpDir, seedId);
+		const out = await runJson<{ plan: { sections: { steps: unknown[] } } }>(
+			["plan", "show", planId],
+			tmpDir,
+		);
+		const steps = out.plan.sections.steps as Array<Record<string, unknown>>;
+		expect(steps[0]?.type).toBe("task");
+		expect(steps[0]?.priority).toBe(2);
+	});
+
 	test("unknown pl- id errors with the 'plan list' hint", async () => {
 		const { stderr, exitCode } = await run(["plan", "show", "pl-9999"], tmpDir);
 		expect(exitCode).not.toBe(0);
