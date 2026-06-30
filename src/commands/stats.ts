@@ -2,7 +2,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { resolveFormat, stripAnsi, VALID_FORMATS } from "../format.ts";
-import { muted, outputJson } from "../output.ts";
+import { muted, outputJson, printError } from "../output.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { PRIORITY_LABELS } from "../types.ts";
@@ -74,7 +74,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (jsonMode) {
 			await outputJson({ success: false, command: "stats", error: fmt.error });
 		} else {
-			console.error(fmt.error);
+			printError(fmt.error);
 		}
 		process.exitCode = 1;
 		return;

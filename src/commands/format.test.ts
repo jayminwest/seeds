@@ -81,6 +81,8 @@ describe("--format on sd list", () => {
 		const { exitCode, stderr } = await run(["list", "--format", "bogus"], tmpDir);
 		expect(exitCode).not.toBe(0);
 		expect(stderr).toContain("Invalid --format value");
+		// pl-c94f step 1: validation errors flow through printError ("✗ " prefix)
+		expect(stderr).toMatch(/^✗ /);
 	});
 
 	test("ids mode pipes work with empty results without trailing message", async () => {

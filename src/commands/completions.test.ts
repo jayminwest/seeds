@@ -62,6 +62,8 @@ describe("sd completions", () => {
 		const { exitCode, stderr } = await run(["completions", "powershell"]);
 		expect(exitCode).toBe(1);
 		expect(stderr).toContain("Unknown shell");
+		// pl-c94f step 1: validation errors flow through printError ("✗ " prefix)
+		expect(stderr).toMatch(/^✗ /);
 	});
 
 	test("missing argument exits non-zero", async () => {

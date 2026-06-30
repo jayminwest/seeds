@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { printError } from "../output.ts";
 
 const SUPPORTED_SHELLS = ["bash", "zsh", "fish"] as const;
 type Shell = (typeof SUPPORTED_SHELLS)[number];
@@ -179,7 +180,7 @@ export function register(program: Command): void {
 		.description("Output shell completion script")
 		.action((shell: string) => {
 			if (!SUPPORTED_SHELLS.includes(shell as Shell)) {
-				console.error(`Unknown shell: ${shell}. Supported: ${SUPPORTED_SHELLS.join(", ")}`);
+				printError(`Unknown shell: ${shell}. Supported: ${SUPPORTED_SHELLS.join(", ")}`);
 				process.exitCode = 1;
 				return;
 			}
