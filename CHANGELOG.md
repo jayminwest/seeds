@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.15] - 2026-07-17
+
+Nightwatch patrol fix (plan pl-dcda): render plan-membership suffix in `sd blocked` human output.
+
+### Fixed
+- `sd blocked` now renders the plan-membership suffix in both plain and default (ANSI) output, mirroring what `sd list` and `sd ready` already do. Previously an issue that belonged to an approved plan showed no plan hint in `sd blocked`. The plain branch now appends `planLineSuffix(planForIssue(...))` to the stripped one-liner; the default branch passes it to `printIssueOneLine`. `ids` / `compact` / `--json` output is unchanged (JSON was already routed through `issueJsonWithPlan`). (seeds-5286)
+
+### Internal
+- CI: force npm as the Nx package manager in `nx.json` so Polygraph's indexer (which runs `nx init` without Bun on PATH) no longer fails with `bun: not found`. Inert for real Bun workflows. (#104)
+
 ## [0.5.14] - 2026-06-30
 
 Nightwatch patrol fixes (plan pl-c94f): four small hygiene fixes from a nightwatch sweep.
