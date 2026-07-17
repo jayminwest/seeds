@@ -8,7 +8,12 @@ import {
 	printError,
 	printIssueOneLine,
 } from "../output.ts";
-import { issueJsonWithPlan, loadPlanContext, planForIssue } from "../plan-context.ts";
+import {
+	issueJsonWithPlan,
+	loadPlanContext,
+	planForIssue,
+	planLineSuffix,
+} from "../plan-context.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 
@@ -58,7 +63,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				console.log("No blocked issues.");
 				return;
 			}
-			for (const issue of blocked) console.log(stripAnsi(formatIssueOneLine(issue, closedIds)));
+			for (const issue of blocked)
+				console.log(
+					stripAnsi(
+						formatIssueOneLine(issue, closedIds) + planLineSuffix(planForIssue(planCtx, issue)),
+					),
+				);
 			console.log(`\n${blocked.length} blocked issue(s)`);
 			return;
 		default:
@@ -66,7 +76,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				console.log("No blocked issues.");
 				return;
 			}
-			for (const issue of blocked) printIssueOneLine(issue, closedIds);
+			for (const issue of blocked)
+				printIssueOneLine(issue, closedIds, planLineSuffix(planForIssue(planCtx, issue)));
 			console.log(`\n${blocked.length} blocked issue(s)`);
 			return;
 	}
