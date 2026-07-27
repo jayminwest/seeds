@@ -5,22 +5,27 @@
 #
 # Required fields: id, kind, cron, role.
 # Optional fields: seed, timezone (default UTC), prompt.
+#
+# All triggers are DISABLED (commented out). Warren's trigger parser
+# (warren/src/triggers.ts) has no "enabled" field, so the way to disable a
+# trigger is to remove it from the active list. Uncomment a block to
+# re-enable it.
 
-- id: nightwatch-patrol
-  kind: cron
-  cron: '0 4 * * 2'
-  role: nightwatch
-  timezone: America/Los_Angeles
-  prompt: |
-    Scan this repo for quality issues. Follow your procedure exactly.
-    Today's date is {{date}}. If you find issues, file a plan. If the
-    codebase is clean, report clean and exit.
+# - id: nightwatch-patrol
+#   kind: cron
+#   cron: '0 4 * * 2'
+#   role: nightwatch
+#   timezone: America/Los_Angeles
+#   prompt: |
+#     Scan this repo for quality issues. Follow your procedure exactly.
+#     Today's date is {{date}}. If you find issues, file a plan. If the
+#     codebase is clean, report clean and exit.
 
-- id: bugwatch-triage
-  kind: cron
-  cron: '0 9 * * 5'
-  role: bugwatch
-  timezone: America/Los_Angeles
-  prompt: |
-    Triage open bug seeds and plan fixes. Follow your procedure exactly.
-    Today's date is {{date}}. If no bugs qualify, report clean and exit.
+# - id: bugwatch-triage
+#   kind: cron
+#   cron: '0 9 * * 5'
+#   role: bugwatch
+#   timezone: America/Los_Angeles
+#   prompt: |
+#     Triage open bug seeds and plan fixes. Follow your procedure exactly.
+#     Today's date is {{date}}. If no bugs qualify, report clean and exit.
