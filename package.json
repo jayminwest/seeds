@@ -51,7 +51,7 @@
 		"knip": "^6",
 		"pino": "^10.3.1",
 		"pino-pretty": "^13.1.3",
-		"typescript": "^5.9.0",
+		"typescript": "^7.0.2",
 		"yaml": "^2.9.0"
 	},
 	"dependencies": {
