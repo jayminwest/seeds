@@ -8,6 +8,8 @@ Git-native issue tracker for AI agent workflows.
 
 Replaces [beads](https://github.com/steveyegge/beads) in the [mulch](https://github.com/jayminwest/mulch) ecosystem. No Dolt, no daemon, no binary DB files. **The JSONL file IS the database.**
 
+Seeds is also the issue queue inside [Warren](https://github.com/jayminwest/warren), which runs coding agents as isolated workloads on infrastructure you control. A `.seeds/` directory in a project turns it on there.
+
 ## Install
 
 ```bash
