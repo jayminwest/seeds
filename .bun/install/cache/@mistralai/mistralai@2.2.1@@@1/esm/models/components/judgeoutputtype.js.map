@@ -1,1 +1,0 @@
-{"version":3,"file":"judgeoutputtype.js","sourceRoot":"","sources":["../../../src/models/components/judgeoutputtype.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,KAAK,CAAC,MAAM,QAAQ,CAAC;AAG5B,MAAM,CAAC,MAAM,eAAe,GAAG;IAC7B,UAAU,EAAE,YAAY;IACxB,cAAc,EAAE,gBAAgB;CACxB,CAAC;AAGX,gBAAgB;AAChB,MAAM,CAAC,MAAM,8BAA8B,GACzC,CAAC,CAAC,IAAI,CAAC,eAAe,CAAC,CAAC"}

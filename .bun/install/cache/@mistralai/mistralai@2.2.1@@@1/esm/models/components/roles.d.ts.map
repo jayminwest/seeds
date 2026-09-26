@@ -1,1 +1,0 @@
-{"version":3,"file":"roles.d.ts","sourceRoot":"","sources":["../../../src/models/components/roles.ts"],"names":[],"mappings":"AAKA,OAAO,KAAK,CAAC,MAAM,QAAQ,CAAC;AAE5B,OAAO,EAAE,QAAQ,EAAE,MAAM,sBAAsB,CAAC;AAEhD,eAAO,MAAM,KAAK;;;;;CAKR,CAAC;AACX,MAAM,MAAM,KAAK,GAAG,QAAQ,CAAC,OAAO,KAAK,CAAC,CAAC;AAE3C,gBAAgB;AAChB,eAAO,MAAM,mBAAmB,EAAE,CAAC,CAAC,OAAO,CAAC,KAAK,EAAE,OAAO,CACnC,CAAC"}

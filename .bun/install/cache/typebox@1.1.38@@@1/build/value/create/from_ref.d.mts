@@ -1,2 +1,0 @@
-import type { TProperties, TRef } from '../../type/index.mjs';
-export declare function FromRef(context: TProperties, type: TRef): unknown;

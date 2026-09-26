@@ -1,1 +1,0 @@
-export type XStaticEnum<Values extends unknown[], Result extends unknown = never> = (Values extends [infer Left extends unknown, ...infer Right extends unknown[]] ? XStaticEnum<Right, Left | Result> : Result);

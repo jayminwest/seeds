@@ -1,1 +1,0 @@
-{"version":3,"file":"locationtype.js","sourceRoot":"","sources":["../../../src/models/components/locationtype.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAGH,OAAO,KAAK,SAAS,MAAM,sBAAsB,CAAC;AAGlD,MAAM,CAAC,MAAM,YAAY,GAAG;IAC1B,KAAK,EAAE,OAAO;IACd,GAAG,EAAE,KAAK;CACF,CAAC;AAGX,gBAAgB;AAChB,MAAM,CAAC,MAAM,0BAA0B,GACrC,SAAS,CAAC,aAAa,CAAC,YAAY,CAAC,CAAC"}
