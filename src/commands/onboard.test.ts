@@ -169,35 +169,16 @@ describe("sd onboard", () => {
 		expect(content).toContain(`Seeds](https://github.com/jayminwest/seeds) v${VERSION}`);
 	});
 
-	test("includes Planning section with full sd plan surface", async () => {
+	test("snippet stays short: claim, plan entry point, setup hook, no hand edits", async () => {
 		await initSeeds(tmpDir);
 		await run(["onboard"], tmpDir);
 		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(content).toContain("### Planning");
-		expect(content).toContain("sd plan templates");
+		expect(content).toContain("sd update <id> --claim");
+		expect(content).not.toContain("--status in_progress");
 		expect(content).toContain("sd plan prompt");
-		expect(content).toContain("sd plan submit");
-		expect(content).toContain("sd plan show");
-		expect(content).toContain("sd plan edit");
-		expect(content).toContain("sd plan outcome");
-		expect(content).toContain("sd plan review");
-	});
-
-	test("includes sd search and --format flag in quick reference", async () => {
-		await initSeeds(tmpDir);
-		await run(["onboard"], tmpDir);
-		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(content).toContain("sd search");
-		expect(content).toContain("--format");
-	});
-
-	test("re-running onboard does not duplicate the Planning section", async () => {
-		await initSeeds(tmpDir);
-		await run(["onboard"], tmpDir);
-		await run(["onboard"], tmpDir);
-		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		const matches = content.match(/### Planning/g) ?? [];
-		expect(matches.length).toBe(1);
+		expect(content).toContain("sd setup claude");
+		expect(content).toContain(".seeds/*.jsonl");
+		expect(content.split("\n").length).toBeLessThan(25);
 	});
 
 	test("surfaces error when markers are out of order (replaceMarkerSection returns null)", async () => {
@@ -233,6 +214,6 @@ describe("sd onboard", () => {
 		await initSeeds(tmpDir);
 		await run(["onboard"], tmpDir);
 		const content = await Bun.file(join(tmpDir, "CLAUDE.md")).text();
-		expect(content).toContain("<!-- seeds-onboard-schema:7 -->");
+		expect(content).toContain("<!-- seeds-onboard-schema:8 -->");
 	});
 });

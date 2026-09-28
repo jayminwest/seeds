@@ -6,7 +6,7 @@ Git-native issue tracker for AI agent workflows.
 [![CI](https://github.com/jayminwest/seeds/actions/workflows/ci.yml/badge.svg)](https://github.com/jayminwest/seeds/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Replaces [beads](https://github.com/steveyegge/beads) in the [mulch](https://github.com/jayminwest/mulch) ecosystem. No Dolt, no daemon, no binary DB files. **The JSONL file IS the database.**
+Part of the [os-eco](https://github.com/jayminwest) agent tooling ecosystem. No daemon, no binary DB files. **The JSONL file IS the database.** Installs as `sd` (and `seeds`).
 
 ## Install
 
@@ -49,7 +49,7 @@ sd list
 sd ready
 
 # Claim and complete
-sd update seeds-a1b2 --status in_progress
+sd update seeds-a1b2 --claim
 sd close seeds-a1b2 --reason "Implemented with exponential backoff"
 
 # Commit .seeds/ changes to git
@@ -135,8 +135,10 @@ See [Planning](#planning) below for the end-to-end workflow.
 
 | Command | Description |
 |---------|-------------|
-| `sd prime` | Output AI agent context (`--compact`, `--json` emits typed `sections`) |
+| `sd prime` | Output AI agent context plus live state (in-progress + top ready issues); `--compact`, `--json` emits typed `sections` + `state` |
 | `sd onboard` | Add seeds section to CLAUDE.md / AGENTS.md |
+| `sd setup claude` | Install Claude Code hooks: SessionStart `sd prime --compact`, PreToolUse `sd guard` (denies hand edits to `.seeds/*.jsonl`). Idempotent; `--remove` |
+| `sd guard` | PreToolUse hook handler (reads hook JSON on stdin) |
 
 ### Utility
 
@@ -411,17 +413,6 @@ Writes hold the `config.yaml` advisory lock and validate the post-write file as 
 ## Architecture
 
 Seeds stores all data in JSONL files inside a `.seeds/` directory — one JSON object per line, fully diffable and mergeable via git. Advisory file locks (`O_CREAT | O_EXCL`) and atomic writes (temp file + rename) ensure safe concurrent access from multiple agents. The `merge=union` gitattribute handles parallel branch merges; dedup-on-read (last occurrence wins) resolves any duplicates. See [CLAUDE.md](CLAUDE.md) for full technical details.
-
-## Why
-
-Beads works but carries baggage this ecosystem doesn't need:
-
-| Problem | Beads | Seeds |
-|---------|-------|-------|
-| Storage | 2.8MB binary `beads.db` (can't diff/merge) | JSONL (diffable, mergeable) |
-| Sync | 286 export-state tracking files | No sync — file IS the DB |
-| Concurrency | `beads.db` lock contention | Advisory locks + atomic writes |
-| Dependencies | Dolt embedded | chalk + commander |
 
 ## Priority Scale
 

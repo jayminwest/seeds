@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sd update <id> --claim [--as <agent>]`: atomic claim under the issues lock. Succeeds only when the issue is `open` and unassigned (or already assigned to the caller); sets `in_progress` + `assignee`. Otherwise exits 1 with a clear error, so two agents can never both claim. Identity defaults to `$USER`; rejects `--status` / `--assignee` alongside. (seeds-8ade)
 - `sd create --from <id>`: records `discoveredFrom` provenance (non-blocking; shown by `sd show` as `From:`). The source issue must exist. (seeds-8ade)
 - `sd create` / `sd update --intent <r-id>` (repeatable, comma-separated ok): stores linked roots idea id(s) in the top-level `intent` field — a string for one id, `string[]` for several — which roots reads directly. Ids must match `r-` + 4–8 hex. `sd update --intent` replaces the list. (seeds-8ade)
+- `sd prime` appends live state: in-progress issues (with assignee) and the top 5 ready issues. `--json` adds a `state` object. Skipped by `--export`; best effort (never fails the command). (seeds-2d9d)
+- `sd setup claude [--remove]`: installs Claude Code hooks in `<project>/.claude/settings.json` — SessionStart `sd prime --compact` and PreToolUse `sd guard` on Write/Edit/MultiEdit/NotebookEdit. Idempotent; keeps unrelated settings and hooks. (seeds-2d9d)
+- `sd guard`: PreToolUse hook handler that denies hand edits to `.seeds/*.jsonl` with a reason naming the `sd` command to use. Unparsable input fails open. (seeds-2d9d)
+- `seeds` long bin alongside `sd`. (seeds-2d9d)
+
+### Changed
+- `sd prime` static text trimmed (~half the size). Close checklist runs `bun run verify` when package.json defines it (else a generic gates step), no longer demands `git push` as critical ("push per repo conventions"), and allows in-session TodoWrite checklists. Claim step uses `sd update <id> --claim`. (seeds-2d9d)
+- `sd onboard` snippet is shorter and uses `sd update <id> --claim`; points at `sd setup claude`. Schema bumped 7 → 8, so existing snippets report outdated. (seeds-2d9d)
+- README drops the "Replaces beads" framing. (seeds-2d9d)
 
 ## [0.5.15] - 2026-07-17
 

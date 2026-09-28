@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { findSeedsDir } from "../config.ts";
+import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
+import { loadPlanContext } from "../plan-context.ts";
+import { sortIssues } from "../sort.ts";
+import { readIssues } from "../store.ts";
+import type { Issue } from "../types.ts";
+import { readyIssues } from "./ready.ts";
 
 const PRIME_FILE = "PRIME.md";
 
@@ -45,196 +51,218 @@ export interface PrimeSectionsCompact {
 
 export type PrimeSections = PrimeSectionsFull | PrimeSectionsCompact;
 
-const FULL_SECTIONS: PrimeSectionsFull = {
-	mode: "full",
-	title: "Seeds Workflow Context",
-	contextRecovery: "Run `sd prime` after compaction, clear, or new session",
-	closeProtocol: {
-		warning: 'Before saying "done" or "complete", you MUST run this checklist:',
-		steps: [
-			"Close completed issues:    sd close <id1> <id2> ...",
-			'File issues for remaining:  sd create --title "..."',
-			"Run quality gates:          bun test && bun run lint && bun run typecheck",
-			"Sync and push:              sd sync && git push",
-			'Verify:                     git status (must show "up to date with origin")',
-		],
-		footer: "**NEVER skip this.** Work is not done until pushed.",
-	},
-	rules: [
-		"**Default**: Use seeds for ALL task tracking (`sd create`, `sd ready`, `sd close`)",
-		"**Prohibited**: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking",
-		"**Workflow**: Create issues BEFORE writing code, mark in_progress when starting",
-		"Git workflow: run `sd sync` at session end",
-	],
-	commandGroups: [
-		{
-			name: "Finding Work",
-			commands: [
-				{ command: "sd ready", description: "Show issues ready to work (no blockers)" },
-				{ command: "sd list --status=open", description: "All open issues" },
-				{ command: "sd list --status=in_progress", description: "Your active work" },
-				{
-					command: "sd show <id> [<id2> ...]",
-					description:
-						"Detailed issue view; multi-id shows each separated by a divider (`--json` returns `issues: [...]`)",
-				},
-			],
-		},
-		{
-			name: "Creating & Updating",
-			commands: [
-				{
-					command: 'sd create --title="..." --type=task|bug|feature|epic --priority=2',
-					description: "New issue\n  - Priority: 0-4 or P0-P4 (0=critical, 2=medium, 4=backlog)",
-				},
-				{
-					command: "sd update <id> --claim --as <agent>",
-					description: "Claim work atomically (fails if already taken)",
-				},
-				{ command: "sd update <id> --assignee=username", description: "Assign to someone" },
-				{
-					command: 'sd create --title="..." --from <id>',
-					description: "File work discovered while on <id> (non-blocking provenance)",
-				},
-				{ command: "sd close <id>", description: "Mark complete" },
-				{ command: "sd close <id1> <id2> ...", description: "Close multiple issues at once" },
-			],
-		},
-		{
-			name: "Dependencies & Blocking",
-			commands: [
-				{ command: "sd dep add <issue> <depends-on>", description: "Add dependency" },
-				{ command: "sd dep remove <issue> <depends-on>", description: "Remove dependency" },
-				{ command: "sd blocked", description: "Show all blocked issues" },
-			],
-		},
-		{
-			name: "Labels",
-			commands: [
-				{ command: "sd label add <id> bug ui", description: "Add labels to an issue" },
-				{ command: "sd label remove <id> bug", description: "Remove labels" },
-				{ command: "sd label list <id>", description: "List labels on an issue" },
-				{ command: "sd label list-all", description: "Show all labels in project" },
-				{
-					command: "sd list --label=bug",
-					description: "Filter by label (AND, comma-separated)",
-				},
-				{ command: "sd list --label-any=bug,ui", description: "Filter by label (OR)" },
-				{ command: "sd list --unlabeled", description: "Issues with no labels" },
-				{ command: 'sd create --title="..." --labels=bug,ui', description: "Create with labels" },
-			],
-		},
-		{
-			name: "Sync & Project Health",
-			commands: [
-				{ command: "sd sync", description: "Stage and commit .seeds/ changes" },
-				{ command: "sd sync --status", description: "Check without committing" },
-				{ command: "sd stats", description: "Project statistics" },
-				{ command: "sd doctor", description: "Check for data integrity issues" },
-			],
-		},
-		{
-			name: "Planning",
-			notes: [
-				'Use `sd plan` when work is large or ambiguous enough to benefit from structured decomposition. The plan spawns one child seed per step; `step.blocks` uses forward semantics (step i with `blocks: [j]` means step i blocks step j). Each step accepts an optional `labels: string[]` field (normalized lowercase/trim/dedup) that flows to the spawned child or merges additively into an adopted seed — useful for tagging agent-spawned children (e.g. `"labels": ["nightwatch"]`) without follow-up `sd label add` calls. For small, well-scoped tasks, just `sd create` directly.',
-			],
-			commands: [
-				{
-					command: "sd plan templates",
-					description: "List built-in templates (`feature`, `bug`, `refactor`) plus custom ones",
-				},
-				{
-					command: "sd plan prompt <seed-id>",
-					description: "Emit prompt JSON for the LLM to fill",
-				},
-				{
-					command: "sd plan submit <seed-id> --plan <file>",
-					description: "Validate + spawn children",
-				},
-				{ command: "sd plan show <pl-id>", description: "Sections, children, nested sub-plans" },
-				{
-					command: "sd plan create <seed-id>",
-					description:
-						"Adopt-only plan (zero spawned children); populate via 'sd plan adopt' + 'sd plan reorder'",
-				},
-				{
-					command: "sd plan adopt <pl-id> <seed-id...> [--step|--at|--before|--after]",
-					description:
-						"Adopt existing seeds into a plan; --at/--before/--after control children position",
-				},
-				{
-					command: "sd plan reorder <pl-id> <seed-id...>",
-					description: "Set the exact plan.children order (permutation of current children)",
-				},
-				{
-					command:
-						"sd plan edit <id> [--name|--section <n> <t>|--step <i> --title/--priority/--type]",
-					description:
-						"In-place field edits; bumps revision. Structural changes still need --overwrite.",
-				},
-				{
-					command: "sd plan outcome <pl-id> --result success|partial|failure",
-					description: "Storage-only outcome",
-				},
-				{
-					command: "sd plan review <pl-id> --by <name>",
-					description: "Optional reviewer (informational)",
-				},
-			],
-		},
-	],
-	workflows: [
-		{
-			name: "Starting work",
-			commands: [
-				"sd ready                              # Find available work",
-				"sd show <id>                          # Review issue details",
-				"sd update <id> --status=in_progress   # Claim it",
-			],
-		},
-		{
-			name: "Completing work",
-			commands: [
-				"sd close <id1> <id2> ...    # Close all completed issues at once",
-				"sd sync                     # Stage + commit .seeds/",
-				"git push                    # Push to remote",
-			],
-		},
-		{
-			name: "Creating dependent work",
-			commands: [
-				'sd create --title="Implement feature X" --type=feature',
-				'sd create --title="Write tests for X" --type=task',
-				"sd dep add <test-id> <feature-id>   # Tests depend on feature",
-			],
-		},
-	],
-};
+// Quality-gate command for the close checklist: the repo's own `verify` script
+// when package.json has one, else a generic instruction (no guessed commands).
+function gatesCommand(projectRoot: string | null): string | null {
+	if (projectRoot) {
+		try {
+			const pkg = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as {
+				scripts?: Record<string, unknown>;
+			};
+			if (typeof pkg.scripts?.verify === "string") return "bun run verify";
+		} catch {
+			// No or unreadable package.json — fall through to the generic step.
+		}
+	}
+	return null;
+}
 
-const COMPACT_SECTIONS: PrimeSectionsCompact = {
-	mode: "compact",
-	title: "Seeds Quick Reference",
-	commands: [
-		{ command: "sd ready", description: "Find unblocked work" },
-		{ command: "sd show <id> [id...]", description: "View one or more issues" },
-		{ command: 'sd create --title "..."', description: "Create issue (--type, --priority)" },
-		{ command: "sd update <id> --claim --as <me>", description: "Claim work (atomic)" },
-		{ command: "sd close <id>", description: "Complete work" },
-		{ command: "sd dep add <a> <b>", description: "a depends on b" },
-		{ command: "sd blocked", description: "Show blocked issues" },
-		{ command: "sd label add <id> <l...>", description: "Add labels" },
-		{ command: "sd list --label=bug", description: "Filter by label" },
-		{
-			command: "sd plan prompt <seed>",
-			description: "Plan large/ambiguous work; spawns child seeds",
+const GENERIC_GATES = "the project's quality gates (tests, lint, typecheck)";
+
+function buildFull(gates: string | null): PrimeSectionsFull {
+	return {
+		mode: "full",
+		title: "Seeds Workflow Context",
+		contextRecovery: "Run `sd prime` after compaction, clear, or new session",
+		closeProtocol: {
+			warning: 'Before saying "done", run this checklist:',
+			steps: [
+				"Close completed issues:    sd close <id1> <id2> ...",
+				'File remaining work:       sd create --title "..." --from <id>',
+				`Run quality gates:         ${gates ?? GENERIC_GATES}`,
+				"Commit issue changes:      sd sync",
+			],
+			footer: "Then push or open a PR as the repo's conventions say.",
 		},
-		{ command: "sd plan submit <seed> --plan <file>", description: "Submit + spawn children" },
-		{ command: "sd sync", description: "Stage + commit .seeds/" },
-	],
-	planningNote:
-		"**Planning:** Use `sd plan` for ambiguous or large work — built-in templates: `feature`, `bug`, `refactor`.",
-	closingNote: "**Before finishing:** `sd close <ids> && sd sync && git push`",
-};
+		rules: [
+			"**Track durable work in seeds** (`sd create`, `sd ready`, `sd close`), not markdown task files. In-session checklists (TodoWrite) are fine.",
+			"**Claim before starting**: `sd update <id> --claim` (atomic; fails if someone else has it)",
+			"**Never hand-edit `.seeds/*.jsonl`**: `sd` commands lock, validate, and dedup; hand edits skip all three",
+		],
+		commandGroups: [
+			{
+				name: "Finding Work",
+				commands: [
+					{ command: "sd ready", description: "Show issues ready to work (no blockers)" },
+					{ command: "sd list --status=in_progress", description: "Active work" },
+					{ command: "sd show <id> [<id2> ...]", description: "Detailed issue view" },
+					{ command: "sd search <query>", description: "Full-text search" },
+				],
+			},
+			{
+				name: "Creating & Updating",
+				commands: [
+					{
+						command: 'sd create --title="..." --type=task|bug|feature|epic --priority=2',
+						description: "New issue (priority 0-4, 0=critical)",
+					},
+					{
+						command: "sd update <id> --claim --as <agent>",
+						description: "Claim work atomically (fails if already taken)",
+					},
+					{
+						command: 'sd create --title="..." --from <id>',
+						description: "File work discovered while on <id> (non-blocking provenance)",
+					},
+					{ command: "sd close <id1> <id2> ...", description: "Close one or more issues" },
+				],
+			},
+			{
+				name: "Dependencies & Blocking",
+				commands: [
+					{ command: "sd dep add <issue> <depends-on>", description: "Add dependency" },
+					{ command: "sd blocked", description: "Show all blocked issues" },
+				],
+			},
+			{
+				name: "Labels",
+				commands: [
+					{ command: "sd label add <id> bug ui", description: "Add labels to an issue" },
+					{ command: "sd list --label=bug", description: "Filter by label" },
+				],
+			},
+			{
+				name: "Sync & Project Health",
+				commands: [
+					{ command: "sd sync", description: "Stage and commit .seeds/ changes" },
+					{ command: "sd doctor", description: "Check for data integrity issues" },
+				],
+			},
+			{
+				name: "Planning",
+				notes: [
+					"Use `sd plan` when work is large or ambiguous; submit spawns one child seed per step. For small, well-scoped tasks, just `sd create`.",
+				],
+				commands: [
+					{
+						command: "sd plan prompt <seed-id>",
+						description: "Emit prompt JSON for the LLM to fill",
+					},
+					{
+						command: "sd plan submit <seed-id> --plan <file>",
+						description: "Validate + spawn children",
+					},
+					{ command: "sd plan show <pl-id>", description: "Sections, children, nested sub-plans" },
+				],
+			},
+		],
+		workflows: [
+			{
+				name: "Starting work",
+				commands: [
+					"sd ready                    # Find available work",
+					"sd show <id>                # Review issue details",
+					"sd update <id> --claim      # Claim it",
+				],
+			},
+			{
+				name: "Completing work",
+				commands: [
+					"sd close <id1> <id2> ...    # Close all completed issues at once",
+					"sd sync                     # Stage + commit .seeds/",
+				],
+			},
+		],
+	};
+}
+
+function buildCompact(gates: string | null): PrimeSectionsCompact {
+	return {
+		mode: "compact",
+		title: "Seeds Quick Reference",
+		commands: [
+			{ command: "sd ready", description: "Find unblocked work" },
+			{ command: "sd show <id> [id...]", description: "View one or more issues" },
+			{
+				command: 'sd create --title "..."',
+				description: "Create issue (--type, --priority, --from)",
+			},
+			{ command: "sd update <id> --claim", description: "Claim work (atomic)" },
+			{ command: "sd close <id>", description: "Complete work" },
+			{ command: "sd dep add <a> <b>", description: "a depends on b" },
+			{ command: "sd plan prompt <seed>", description: "Plan large/ambiguous work" },
+			{ command: "sd sync", description: "Stage + commit .seeds/" },
+		],
+		planningNote:
+			"**Planning:** Use `sd plan` for ambiguous or large work — built-in templates: `feature`, `bug`, `refactor`.",
+		closingNote: `**Before finishing:** \`sd close <ids>\`, run ${gates ? `\`${gates}\`` : GENERIC_GATES}, \`sd sync\`; push per repo conventions. Never hand-edit \`.seeds/*.jsonl\`.`,
+	};
+}
+
+// ── Live state ─────────────────────────────────────────────────────────────
+
+const READY_LIMIT = 5;
+
+export interface PrimeIssueRef {
+	id: string;
+	title: string;
+	priority: number;
+	assignee?: string;
+}
+
+export interface PrimeState {
+	inProgress: PrimeIssueRef[];
+	ready: PrimeIssueRef[];
+	readyCount: number;
+}
+
+function ref(i: Issue): PrimeIssueRef {
+	return {
+		id: i.id,
+		title: i.title,
+		priority: i.priority,
+		...(i.assignee ? { assignee: i.assignee } : {}),
+	};
+}
+
+async function loadState(seedsDir: string): Promise<PrimeState> {
+	const issues = await readIssues(seedsDir);
+	const ready = sortIssues(readyIssues(issues, await loadPlanContext(seedsDir)), "priority");
+	return {
+		inProgress: sortIssues(
+			issues.filter((i) => i.status === "in_progress"),
+			"priority",
+		).map(ref),
+		ready: ready.slice(0, READY_LIMIT).map(ref),
+		readyCount: ready.length,
+	};
+}
+
+function refLine(r: PrimeIssueRef): string {
+	const who = r.assignee ? ` (@${r.assignee})` : "";
+	return `- ${r.id} P${String(r.priority)} ${r.title}${who}`;
+}
+
+export function renderState(state: PrimeState): string {
+	const lines = ["## Current State", ""];
+	if (state.inProgress.length > 0) {
+		lines.push("In progress:");
+		for (const r of state.inProgress) lines.push(refLine(r));
+		lines.push("");
+	}
+	if (state.readyCount === 0) {
+		lines.push("Ready: none");
+	} else {
+		const more =
+			state.readyCount > state.ready.length
+				? ` (top ${String(state.ready.length)} of ${String(state.readyCount)})`
+				: "";
+		lines.push(`Ready${more}:`);
+		for (const r of state.ready) lines.push(refLine(r));
+	}
+	lines.push("");
+	return lines.join("\n");
+}
 
 function renderFull(s: PrimeSectionsFull): string {
 	const lines: string[] = [];
@@ -245,7 +273,7 @@ function renderFull(s: PrimeSectionsFull): string {
 
 	lines.push("# Session Close Protocol");
 	lines.push("");
-	lines.push(`**CRITICAL**: ${s.closeProtocol.warning}`);
+	lines.push(s.closeProtocol.warning);
 	lines.push("");
 	lines.push("```");
 	s.closeProtocol.steps.forEach((step, i) => {
@@ -313,20 +341,53 @@ function renderCompact(s: PrimeSectionsCompact): string {
 	return lines.join("\n");
 }
 
-export function buildFullSections(): PrimeSectionsFull {
-	return FULL_SECTIONS;
+export function buildFullSections(projectRoot: string | null = null): PrimeSectionsFull {
+	return buildFull(gatesCommand(projectRoot));
 }
 
-export function buildCompactSections(): PrimeSectionsCompact {
-	return COMPACT_SECTIONS;
+export function buildCompactSections(projectRoot: string | null = null): PrimeSectionsCompact {
+	return buildCompact(gatesCommand(projectRoot));
 }
 
 export function renderPrimeSections(sections: PrimeSections): string {
 	return sections.mode === "compact" ? renderCompact(sections) : renderFull(sections);
 }
 
-function defaultPrimeContent(compact: boolean): string {
-	return renderPrimeSections(compact ? COMPACT_SECTIONS : FULL_SECTIONS);
+async function findSeedsDirOrNull(): Promise<string | null> {
+	try {
+		return await findSeedsDir();
+	} catch {
+		return null; // No seeds dir — static template only, no live state.
+	}
+}
+
+// Live state is best effort: prime runs as a SessionStart hook, where a
+// failure must never block the session.
+async function loadStateSafe(seedsDir: string | null): Promise<PrimeState | null> {
+	if (!seedsDir) return null;
+	try {
+		return await loadState(seedsDir);
+	} catch {
+		return null;
+	}
+}
+
+// A custom PRIME.md is opaque — we can't structurally parse it, so sections is null.
+async function primeContent(
+	seedsDir: string | null,
+	sections: PrimeSections,
+): Promise<{ sections: PrimeSections | null; content: string }> {
+	const custom = seedsDir ? Bun.file(join(seedsDir, PRIME_FILE)) : null;
+	if (custom && (await custom.exists())) return { sections: null, content: await custom.text() };
+	return { sections, content: renderPrimeSections(sections) };
+}
+
+function withState(content: string, state: PrimeState | null): string {
+	if (!state) return content;
+	let sep = "\n\n";
+	if (content === "" || content.endsWith("\n\n")) sep = "";
+	else if (content.endsWith("\n")) sep = "\n";
+	return `${content}${sep}${renderState(state)}`;
 }
 
 export async function run(args: string[]): Promise<void> {
@@ -334,51 +395,27 @@ export async function run(args: string[]): Promise<void> {
 	const compact = args.includes("--compact");
 	const exportMode = args.includes("--export");
 
-	// --export always outputs the default template
+	const seedsDir = await findSeedsDirOrNull();
+	const projectRoot = seedsDir ? projectRootFromSeedsDir(seedsDir) : process.cwd();
+	const defaults = compact ? buildCompactSections(projectRoot) : buildFullSections(projectRoot);
+
+	// --export always outputs the default template, without live state.
 	if (exportMode) {
-		const sections = compact ? COMPACT_SECTIONS : FULL_SECTIONS;
-		const content = renderPrimeSections(sections);
+		const content = renderPrimeSections(defaults);
 		if (jsonMode) {
-			await outputJson({ success: true, command: "prime", sections, content });
+			await outputJson({ success: true, command: "prime", sections: defaults, content });
 		} else {
 			process.stdout.write(content);
 		}
 		return;
 	}
 
-	// Try to find seeds dir for custom PRIME.md
-	let customContent: string | null = null;
-	try {
-		const seedsDir = await findSeedsDir();
-		const customFile = Bun.file(join(seedsDir, PRIME_FILE));
-		if (await customFile.exists()) {
-			customContent = await customFile.text();
-		}
-	} catch {
-		// No seeds dir — that's fine, use default
-	}
-
-	if (customContent !== null) {
-		// Custom PRIME.md is opaque — we can't structurally parse it, so omit sections.
-		if (jsonMode) {
-			await outputJson({
-				success: true,
-				command: "prime",
-				sections: null,
-				content: customContent,
-			});
-		} else {
-			process.stdout.write(customContent);
-		}
-		return;
-	}
-
-	const sections = compact ? COMPACT_SECTIONS : FULL_SECTIONS;
-	const content = renderPrimeSections(sections);
+	const { sections, content } = await primeContent(seedsDir, defaults);
+	const state = await loadStateSafe(seedsDir);
 	if (jsonMode) {
-		await outputJson({ success: true, command: "prime", sections, content });
+		await outputJson({ success: true, command: "prime", sections, state, content });
 	} else {
-		process.stdout.write(content);
+		process.stdout.write(withState(content, state));
 	}
 }
 
@@ -399,8 +436,4 @@ export function register(program: Command): void {
 }
 
 // Internal exports for testing.
-export const _internal = {
-	defaultPrimeContent,
-	FULL_SECTIONS,
-	COMPACT_SECTIONS,
-};
+export const _internal = { gatesCommand };

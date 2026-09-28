@@ -31,6 +31,8 @@ export async function registerAll(program: Command): Promise<void> {
 		import("./commands/unblock.ts"),
 		import("./commands/plan.ts"),
 		import("./commands/config.ts"),
+		import("./commands/setup.ts"),
+		import("./commands/guard.ts"),
 	]);
 
 	for (const mod of mods) {
