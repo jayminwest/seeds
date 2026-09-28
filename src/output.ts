@@ -125,6 +125,17 @@ function formatExtensionsLine(ext: Record<string, unknown> | undefined): string 
 	return `Extensions: ${pairs.join(" ")}`;
 }
 
+// Render the non-blocking links: discoveredFrom provenance and roots intent.
+function formatLinkLines(issue: Issue): string[] {
+	const lines: string[] = [];
+	if (issue.discoveredFrom) lines.push(`From:     ${accent(issue.discoveredFrom)}`);
+	if (issue.intent) {
+		const ids = Array.isArray(issue.intent) ? issue.intent : [issue.intent];
+		lines.push(`Intent:   ${ids.map((id) => accent(id)).join(", ")}`);
+	}
+	return lines;
+}
+
 export function formatIssueFull(issue: Issue): string {
 	const statusColor =
 		issue.status === "closed" ? muted : issue.status === "in_progress" ? chalk.cyan : brand;
@@ -137,6 +148,7 @@ export function formatIssueFull(issue: Issue): string {
 	if (issue.assignee) lines.push(`Assignee: ${issue.assignee}`);
 	if (issue.labels?.length)
 		lines.push(`Labels:   ${issue.labels.map((l) => accent(l)).join(", ")}`);
+	lines.push(...formatLinkLines(issue));
 	const extLine = formatExtensionsLine(issue.extensions);
 	if (extLine) lines.push(extLine);
 	if (issue.description) lines.push(`\n${issue.description}`);

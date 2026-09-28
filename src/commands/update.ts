@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
+import { collect, collectRepeated, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { affectedPlanIds, applyPlanTransitions } from "../plan-lifecycle.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
@@ -63,6 +64,17 @@ function parseExtensionsPatch(raw: string): Record<string, unknown> {
 	return parsed as Record<string, unknown>;
 }
 
+// --claim identity: --as wins, then $USER. --claim sets status and assignee
+// itself, so it rejects the flags it would silently override.
+function resolveClaimant(flags: Record<string, string | boolean>): string {
+	if (typeof flags.status === "string" || typeof flags.assignee === "string") {
+		throw new Error("--claim cannot be combined with --status or --assignee");
+	}
+	const as = typeof flags.as === "string" ? flags.as.trim() : (process.env.USER ?? "");
+	if (!as) throw new Error("--claim needs an identity: pass --as <agent>");
+	return as;
+}
+
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const id = args.find((a) => !a.startsWith("--"));
@@ -73,7 +85,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const dir = seedsDir ?? (await findSeedsDir());
 	let updated: Issue | undefined;
 
-	const statusChanging = typeof flags.status === "string";
+	const claim = flags.claim === true;
+	const claimant = claim ? resolveClaimant(flags) : undefined;
+	const intentValues = collectRepeated(args, "intent");
+	const intent = intentValues.length > 0 ? parseIntent(intentValues) : undefined;
+	const statusChanging = typeof flags.status === "string" || claim;
 	const inner = async () => {
 		const issues = await readIssues(dir);
 		const idx = issues.findIndex((i) => i.id === id);
@@ -81,6 +97,21 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		if (!issue) throw new Error(`Issue not found: ${id}`);
 		const now = new Date().toISOString();
 		const patch: Partial<Issue> = { updatedAt: now };
+
+		// Claim is checked and applied under the issues lock, so of any number
+		// of concurrent claimants exactly one sees status=open and wins.
+		if (claimant !== undefined) {
+			if (issue.status !== "open") {
+				const by = issue.assignee ? ` by ${issue.assignee}` : "";
+				throw new Error(`Cannot claim ${id}: status is ${issue.status}${by}`);
+			}
+			if (issue.assignee && issue.assignee !== claimant) {
+				throw new Error(`Cannot claim ${id}: already assigned to ${issue.assignee}`);
+			}
+			patch.status = "in_progress";
+			patch.assignee = claimant;
+		}
+		if (intent !== undefined) patch.intent = intent;
 
 		if (typeof flags.status === "string") {
 			const s = flags.status;
@@ -212,6 +243,9 @@ export function register(program: Command): void {
 		.option("--set-labels <labels>", "Set labels (comma-separated, empty to clear)")
 		.option("--extensions <json>", "Shallow-merge JSON object into Issue.extensions")
 		.option("--clear-extensions", "Remove the extensions field")
+		.option("--claim", "Atomically claim: open → in_progress, assignee = --as (fails if taken)")
+		.option("--as <agent>", "Identity for --claim (default: $USER)")
+		.option("--intent <r-id>", "Set linked roots idea(s) (repeatable, replaces)", collect, [])
 		.option("--json", "Output as JSON")
 		.action(
 			async (
@@ -230,6 +264,9 @@ export function register(program: Command): void {
 					setLabels?: string;
 					extensions?: string;
 					clearExtensions?: boolean;
+					claim?: boolean;
+					as?: string;
+					intent: string[];
 					json?: boolean;
 				},
 			) => {
@@ -247,6 +284,9 @@ export function register(program: Command): void {
 				if (opts.setLabels !== undefined) args.push("--set-labels", opts.setLabels);
 				if (opts.extensions !== undefined) args.push("--extensions", opts.extensions);
 				if (opts.clearExtensions) args.push("--clear-extensions");
+				if (opts.claim) args.push("--claim");
+				if (opts.as) args.push("--as", opts.as);
+				for (const r of opts.intent) args.push("--intent", r);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

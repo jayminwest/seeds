@@ -144,6 +144,8 @@ sd create --title <text>               Create a new issue
   --priority 0-4 or P0-P4             (default: 2)
   --description <text>
   --assignee <name>
+  --from <id>                          Provenance: discovered while working on <id> (non-blocking)
+  --intent <r-id>                      Link a roots idea (repeatable)
 sd show <id>                           Show issue details
 sd list                                List issues with filters
   --status --type --assignee --limit
@@ -165,6 +167,8 @@ sd search <query>                      Substring search on title + description
 sd update <id>                         Update issue fields
   --extensions <json>                  Shallow-merge JSON object into Issue.extensions
   --clear-extensions                   Remove the extensions field
+  --claim [--as <agent>]               Atomic claim: open + unassigned (or ours) → in_progress + assignee; else exit 1
+  --intent <r-id>                      Replace linked roots idea(s) (repeatable)
 sd close <id> [<id2> ...]              Close one or more issues
   --reason <text>
 sd dep add <issue> <depends-on>        Add dependency
@@ -325,6 +329,8 @@ interface Issue {
   closeReason?: string;
   blocks?: string[];
   blockedBy?: string[];
+  discoveredFrom?: string;     // sd create --from <id>; provenance only, never blocks
+  intent?: string | string[];  // roots idea id(s), r-xxxx; read directly by roots
   extensions?: Record<string, unknown>;  // opaque runtime metadata (consumer-owned, namespaced)
   createdAt: string;           // ISO 8601
   updatedAt: string;
