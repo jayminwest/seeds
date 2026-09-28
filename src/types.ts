@@ -14,6 +14,12 @@ export interface Issue {
 	plan_id?: string;
 	plan_step_index?: number;
 	requires_plan?: boolean;
+	// Provenance: the issue this one was discovered while working on
+	// (`sd create --from <id>`). Informational only — never blocks.
+	discoveredFrom?: string;
+	// Roots idea id(s) this issue implements (`--intent r-xxxx`). A string for
+	// one id, string[] for several; read directly by roots.
+	intent?: string | string[];
 	extensions?: Record<string, unknown>;
 	createdAt: string;
 	updatedAt: string;

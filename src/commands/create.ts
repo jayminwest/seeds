@@ -1,6 +1,7 @@
 import { type Command, Option } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
+import { collect, collectRepeated, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import { appendIssue, issuesPath, readIssues, withLock } from "../store.ts";
@@ -82,6 +83,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 					? flags.body
 					: undefined;
 
+	const intent = parseIntent(collectRepeated(args, "intent"));
+	if (flags.from === true) throw new Error("--from requires an issue id");
+	const from = typeof flags.from === "string" ? flags.from.trim() : undefined;
+
 	const dir = seedsDir ?? (await findSeedsDir());
 	const config = await readConfig(dir);
 
@@ -89,6 +94,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	await withLock(issuesPath(dir), async () => {
 		const existing = await readIssues(dir);
 		const existingIds = new Set(existing.map((i) => i.id));
+		if (from && !existingIds.has(from)) throw new Error(`--from issue not found: ${from}`);
 		const id = generateId(config.project, existingIds);
 		const now = new Date().toISOString();
 		const issue: Issue = {
@@ -102,6 +108,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			...(assignee ? { assignee } : {}),
 			...(description ? { description } : {}),
 			...(labels && labels.length > 0 ? { labels } : {}),
+			...(from ? { discoveredFrom: from } : {}),
+			...(intent ? { intent } : {}),
 		};
 		await appendIssue(dir, issue);
 		createdId = id;
@@ -127,6 +135,8 @@ export function register(program: Command): void {
 		.option("--body <text>", "Issue description (alias for --description)")
 		.option("--labels <labels>", "Comma-separated labels")
 		.addOption(new Option("--label <labels>", "Comma-separated labels (alias)").hideHelp())
+		.option("--from <id>", "Record the issue this was discovered from (provenance, non-blocking)")
+		.option("--intent <r-id>", "Link to a roots idea (repeatable)", collect, [])
 		.option("--json", "Output as JSON")
 		.action(
 			async (opts: {
@@ -139,6 +149,8 @@ export function register(program: Command): void {
 				body?: string;
 				labels?: string;
 				label?: string;
+				from?: string;
+				intent: string[];
 				json?: boolean;
 			}) => {
 				const args: string[] = ["--title", opts.title];
@@ -151,6 +163,8 @@ export function register(program: Command): void {
 				// --labels wins over --label alias when both are supplied.
 				if (opts.labels) args.push("--labels", opts.labels);
 				else if (opts.label) args.push("--labels", opts.label);
+				if (opts.from) args.push("--from", opts.from);
+				for (const r of opts.intent) args.push("--intent", r);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

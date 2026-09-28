@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sd update <id> --claim [--as <agent>]`: atomic claim under the issues lock. Succeeds only when the issue is `open` and unassigned (or already assigned to the caller); sets `in_progress` + `assignee`. Otherwise exits 1 with a clear error, so two agents can never both claim. Identity defaults to `$USER`; rejects `--status` / `--assignee` alongside. (seeds-8ade)
+- `sd create --from <id>`: records `discoveredFrom` provenance (non-blocking; shown by `sd show` as `From:`). The source issue must exist. (seeds-8ade)
+- `sd create` / `sd update --intent <r-id>` (repeatable, comma-separated ok): stores linked roots idea id(s) in the top-level `intent` field — a string for one id, `string[]` for several — which roots reads directly. Ids must match `r-` + 4–8 hex. `sd update --intent` replaces the list. (seeds-8ade)
+
 ## [0.5.15] - 2026-07-17
 
 Nightwatch patrol fix (plan pl-dcda): render plan-membership suffix in `sd blocked` human output.
