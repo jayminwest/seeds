@@ -201,8 +201,8 @@ Seeds dogfoods seeds: the work queue for this repo lives in
 2. **Find unblocked work.** `sd ready` lists open issues with no
    unresolved blockers. Use `sd search <query>` to locate related
    issues.
-3. **Claim it.** `sd update <id> --status in_progress` before you
-   start, so parallel agents don't double-book.
+3. **Claim it.** `sd update <id> --claim` before you start; it is
+   atomic, so parallel agents can't double-book.
 4. **Decompose if large.** For ambiguous or multi-step work, use
    `sd plan prompt <seed-id>` → fill the emitted JSON →
    `sd plan submit <seed-id> --plan <file>` to spawn structured child

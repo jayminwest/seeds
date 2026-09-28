@@ -13,6 +13,7 @@ import {
 	isPlanDraftBlocking,
 	issueJsonWithPlan,
 	loadPlanContext,
+	type PlanContext,
 	planForIssue,
 	planLineSuffix,
 } from "../plan-context.ts";
@@ -35,6 +36,31 @@ function isScheduledOut(issue: Issue, now: number): boolean {
 		if (!Number.isNaN(t) && t > now) return true;
 	}
 	return false;
+}
+
+/**
+ * Open issues whose blockers are all closed (plus seeds whose draft plan needs
+ * planning). Unsorted and unfiltered; shared with `sd prime`'s live state.
+ */
+export function readyIssues(issues: Issue[], planCtx: PlanContext): Issue[] {
+	const closedIds = new Set(issues.filter((i) => i.status === "closed").map((i) => i.id));
+	return issues.filter((i) => {
+		if (i.status !== "open") return false;
+		// PLAN_SPEC.md:342 — seeds with requires_plan are excluded until their
+		// own sub-plan reaches `approved`. Lookup by seed-id since plan_id is
+		// not set on the spawned child until its sub-plan submit succeeds.
+		if (i.requires_plan === true) {
+			const sub = planCtx.plansBySeed.get(i.id);
+			if (!sub || sub.status === "draft") return false;
+			// approved/active/done: fall through to standard blocker check.
+		} else if (isPlanDraftBlocking(planForIssue(planCtx, i))) {
+			// Planning is the highest-priority work: surface seeds with a draft
+			// plan even if they would otherwise be blocked. (PLAN_SPEC.md:154)
+			return true;
+		}
+		const blockers = i.blockedBy ?? [];
+		return blockers.every((bid) => closedIds.has(bid));
+	});
 }
 
 function parseArgs(args: string[]): Record<string, string | boolean> {
@@ -112,24 +138,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const planCtx = await loadPlanContext(dir);
 
 	const closedIds = new Set(issues.filter((i: Issue) => i.status === "closed").map((i) => i.id));
-
-	let ready = issues.filter((i: Issue) => {
-		if (i.status !== "open") return false;
-		// PLAN_SPEC.md:342 — seeds with requires_plan are excluded until their
-		// own sub-plan reaches `approved`. Lookup by seed-id since plan_id is
-		// not set on the spawned child until its sub-plan submit succeeds.
-		if (i.requires_plan === true) {
-			const sub = planCtx.plansBySeed.get(i.id);
-			if (!sub || sub.status === "draft") return false;
-			// approved/active/done: fall through to standard blocker check.
-		} else if (isPlanDraftBlocking(planForIssue(planCtx, i))) {
-			// Planning is the highest-priority work: surface seeds with a draft
-			// plan even if they would otherwise be blocked. (PLAN_SPEC.md:154)
-			return true;
-		}
-		const blockers = i.blockedBy ?? [];
-		return blockers.every((bid) => closedIds.has(bid));
-	});
+	let ready = readyIssues(issues, planCtx);
 
 	ready = applyIssueFilters(ready, filterOptionsFromFlags(flags));
 

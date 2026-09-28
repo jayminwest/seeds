@@ -64,7 +64,7 @@ describe("sd prime", () => {
 		await Bun.write(join(tmpDir, ".seeds", "PRIME.md"), "my custom agent context");
 		const { stdout, exitCode } = await run(["prime"], tmpDir);
 		expect(exitCode).toBe(0);
-		expect(stdout).toBe("my custom agent context");
+		expect(stdout.startsWith("my custom agent context\n\n## Current State")).toBe(true);
 	});
 
 	test("full content includes essential command sections", async () => {
@@ -119,8 +119,8 @@ describe("sd prime", () => {
 		expect(result.sections.mode).toBe("full");
 		expect(result.sections.title).toBe("Seeds Workflow Context");
 
-		// Close protocol has 5 steps.
-		expect(result.sections.closeProtocol.steps).toHaveLength(5);
+		// Close protocol has 4 steps.
+		expect(result.sections.closeProtocol.steps).toHaveLength(4);
 		expect(result.sections.closeProtocol.steps[0]).toContain("sd close");
 
 		// Rules are non-empty.
@@ -207,5 +207,65 @@ describe("sd prime", () => {
 		expect(result.sections?.mode).toBe("full");
 		expect(result.content).toContain("Seeds Workflow Context");
 		expect(result.content).not.toContain("custom prime content");
+	});
+
+	test("appends live state: in-progress issues and top ready", async () => {
+		await initSeeds(tmpDir);
+		for (let i = 0; i < 7; i++) await run(["create", "--title", `Task ${String(i)}`], tmpDir);
+		await run(["create", "--title", "Urgent", "--priority", "0"], tmpDir);
+		const created = await run(["create", "--title", "Mine", "--json"], tmpDir);
+		const { id } = JSON.parse(created.stdout) as { id: string };
+		await run(["update", id, "--claim", "--as", "bot"], tmpDir);
+
+		const { stdout } = await run(["prime", "--compact"], tmpDir);
+		expect(stdout).toContain("## Current State");
+		expect(stdout).toContain(`- ${id} P2 Mine (@bot)`);
+		expect(stdout).toContain("Ready (top 5 of 8):");
+		const readyLines = stdout.split("Ready (top 5 of 8):")[1]?.trim().split("\n") ?? [];
+		expect(readyLines).toHaveLength(5);
+		expect(readyLines[0]).toContain("P0 Urgent");
+	});
+
+	test("--json carries structured state", async () => {
+		await initSeeds(tmpDir);
+		await run(["create", "--title", "One"], tmpDir);
+		const { stdout } = await run(["prime", "--json"], tmpDir);
+		const result = JSON.parse(stdout) as {
+			state: { inProgress: unknown[]; ready: Array<{ title: string }>; readyCount: number };
+			content: string;
+		};
+		expect(result.state.inProgress).toHaveLength(0);
+		expect(result.state.readyCount).toBe(1);
+		expect(result.state.ready[0]?.title).toBe("One");
+		expect(result.content).not.toContain("Current State");
+	});
+
+	test("empty project reports no ready work; no project omits state", async () => {
+		const bare = await run(["prime", "--json"], tmpDir);
+		expect((JSON.parse(bare.stdout) as { state: unknown }).state).toBeNull();
+		await initSeeds(tmpDir);
+		const { stdout } = await run(["prime", "--compact"], tmpDir);
+		expect(stdout).toContain("Ready: none");
+		expect(stdout).not.toContain("In progress:");
+	});
+
+	test("--export omits live state", async () => {
+		await initSeeds(tmpDir);
+		await run(["create", "--title", "One"], tmpDir);
+		const { stdout } = await run(["prime", "--export"], tmpDir);
+		expect(stdout).not.toContain("Current State");
+	});
+
+	test("close checklist uses `bun run verify` only when package.json defines it", async () => {
+		await initSeeds(tmpDir);
+		const before = await run(["prime"], tmpDir);
+		expect(before.stdout).not.toContain("bun run verify");
+		expect(before.stdout).toContain("the project's quality gates");
+		expect(before.stdout).not.toContain("git push");
+		await Bun.write(join(tmpDir, "package.json"), JSON.stringify({ scripts: { verify: "x" } }));
+		const full = await run(["prime"], tmpDir);
+		expect(full.stdout).toContain("Run quality gates:         bun run verify");
+		const compact = await run(["prime", "--compact"], tmpDir);
+		expect(compact.stdout).toContain("run `bun run verify`");
 	});
 });

@@ -65,6 +65,7 @@ const loaders: Record<string, () => Promise<CommandModule>> = {
 	unblock: () => import("./commands/unblock.ts"),
 	config: () => import("./commands/config.ts"),
 	plan: () => import("./commands/plan.ts"),
+	setup: () => import("./commands/setup.ts"),
 };
 
 function formatConsoleArgs(parts: unknown[]): string {
