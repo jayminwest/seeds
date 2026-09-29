@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-29
+
 ### Added
 - `sd update <id> --claim [--as <agent>]`: atomic claim under the issues lock. Succeeds only when the issue is `open` and unassigned (or already assigned to the caller); sets `in_progress` + `assignee`. Otherwise exits 1 with a clear error, so two agents can never both claim. Identity defaults to `$USER`; rejects `--status` / `--assignee` alongside. (seeds-8ade)
 - `sd create --from <id>`: records `discoveredFrom` provenance (non-blocking; shown by `sd show` as `From:`). The source issue must exist. (seeds-8ade)
@@ -433,7 +435,8 @@ Nightwatch patrol fixes (plan pl-09b0): a batch of small correctness and consist
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jayminwest/seeds/compare/v0.5.15...v0.6.0
 [0.5.1]: https://github.com/jayminwest/seeds/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jayminwest/seeds/compare/v0.4.7...v0.5.0
 [0.4.7]: https://github.com/jayminwest/seeds/compare/v0.4.6...v0.4.7
