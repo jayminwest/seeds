@@ -8,6 +8,8 @@ Git-native issue tracker for AI agent workflows.
 
 Part of the [os-eco](https://github.com/jayminwest) agent tooling ecosystem. No daemon, no binary DB files. **The JSONL file IS the database.** Installs as `sd` (and `seeds`).
 
+Seeds is also the issue queue inside [Warren](https://github.com/jayminwest/warren), which runs coding agents as isolated workloads on infrastructure you control. A `.seeds/` directory in a project turns it on there.
+
 ## Install
 
 ```bash
