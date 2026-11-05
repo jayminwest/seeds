@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Command } from "commander";
 import { findSeedsDir, isInsideWorktree, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson, printSuccess, printWarning } from "../output.ts";
@@ -11,6 +13,17 @@ function spawnSync(
 	const stdout = new TextDecoder().decode(result.stdout);
 	const stderr = new TextDecoder().decode(result.stderr);
 	return { stdout, stderr, exitCode: result.exitCode ?? 0 };
+}
+
+// Paths sync stages. .gitattributes rides along when it carries .seeds/ merge
+// rules, so the merge strategy sd init writes reaches other clones.
+function syncPaths(projectRoot: string): string[] {
+	const paths = [`${SEEDS_DIR_NAME}/`];
+	const attrs = join(projectRoot, ".gitattributes");
+	if (existsSync(attrs) && readFileSync(attrs, "utf8").includes(`${SEEDS_DIR_NAME}/`)) {
+		paths.push(".gitattributes");
+	}
+	return paths;
 }
 
 export async function run(args: string[], seedsDir?: string): Promise<void> {
@@ -38,10 +51,17 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		return;
 	}
 
+	const paths = syncPaths(projectRoot);
 	const statusResult = spawnSync(
-		["git", "-C", projectRoot, "status", "--porcelain", `${SEEDS_DIR_NAME}/`],
+		["git", "-C", projectRoot, "status", "--porcelain", "--", ...paths],
 		projectRoot,
 	);
+	if (statusResult.exitCode !== 0) {
+		if (/not a git repository/i.test(statusResult.stderr)) {
+			throw new Error(`Not a git repository: ${projectRoot}`);
+		}
+		throw new Error(`git status failed: ${statusResult.stderr}`);
+	}
 
 	const changed = statusResult.stdout.trim();
 
@@ -94,7 +114,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	// Stage
-	const addResult = spawnSync(["git", "-C", projectRoot, "add", `${SEEDS_DIR_NAME}/`], projectRoot);
+	const addResult = spawnSync(["git", "-C", projectRoot, "add", "--", ...paths], projectRoot);
 	if (addResult.exitCode !== 0) {
 		throw new Error(`git add failed: ${addResult.stderr}`);
 	}

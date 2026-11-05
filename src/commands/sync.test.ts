@@ -310,3 +310,101 @@ describe("sync — printSuccess + outputJson routing", () => {
 		expect(result.exitCode).not.toBe(0);
 	});
 });
+
+describe("sync — .gitattributes and non-git dirs", () => {
+	function silence(): () => void {
+		const origLog = console.log;
+		const origErr = console.error;
+		console.log = () => {};
+		console.error = () => {};
+		return () => {
+			console.log = origLog;
+			console.error = origErr;
+		};
+	}
+
+	function initRepo(): string {
+		const repo = join(tmpDir, "repo");
+		mkdirSync(repo);
+		git(["init"], repo);
+		git(["config", "user.email", "test@test.com"], repo);
+		git(["config", "user.name", "Test"], repo);
+		initSeedsDir(repo);
+		return repo;
+	}
+
+	function porcelain(repo: string): string {
+		const result = Bun.spawnSync(["git", "status", "--porcelain"], { cwd: repo, stdout: "pipe" });
+		return new TextDecoder().decode(result.stdout).trim();
+	}
+
+	test("stages and commits an untracked .gitattributes carrying .seeds/ rules", async () => {
+		const repo = initRepo();
+		writeFileSync(join(repo, ".gitattributes"), ".seeds/issues.jsonl merge=union\n");
+
+		const restore = silence();
+		try {
+			await run([], join(repo, ".seeds"));
+		} finally {
+			restore();
+		}
+
+		expect(porcelain(repo)).toBe("");
+	});
+
+	test("--status reports a modified .gitattributes carrying .seeds/ rules", async () => {
+		const repo = initRepo();
+		writeFileSync(join(repo, ".gitattributes"), ".seeds/issues.jsonl merge=union\n");
+		git(["add", "."], repo);
+		git(["commit", "-m", "init"], repo);
+		writeFileSync(
+			join(repo, ".gitattributes"),
+			".seeds/issues.jsonl merge=union\n.seeds/plans.jsonl merge=union\n",
+		);
+
+		const out: string[] = [];
+		const origWrite = process.stdout.write.bind(process.stdout);
+		process.stdout.write = ((data: string) => {
+			out.push(data);
+			return true;
+		}) as typeof process.stdout.write;
+		try {
+			await run(["--status", "--json"], join(repo, ".seeds"));
+		} finally {
+			process.stdout.write = origWrite;
+		}
+
+		const payload = JSON.parse(out.join(""));
+		expect(payload.hasChanges).toBe(true);
+		expect(payload.changes).toContain(".gitattributes");
+	});
+
+	test("leaves a .gitattributes without .seeds/ rules alone", async () => {
+		const repo = initRepo();
+		writeFileSync(join(repo, ".gitattributes"), "*.png binary\n");
+
+		const restore = silence();
+		try {
+			await run([], join(repo, ".seeds"));
+		} finally {
+			restore();
+		}
+
+		expect(porcelain(repo)).toBe("?? .gitattributes");
+	});
+
+	test("throws 'Not a git repository' outside a git repo", async () => {
+		const dir = join(tmpDir, "nogit");
+		mkdirSync(dir);
+		initSeedsDir(dir);
+		// Pin discovery to tmpDir so a git repo above the OS tmpdir can't leak in.
+		const origCeiling = process.env.GIT_CEILING_DIRECTORIES;
+		process.env.GIT_CEILING_DIRECTORIES = tmpDir;
+		try {
+			await expect(run([], join(dir, ".seeds"))).rejects.toThrow(/Not a git repository/);
+		} finally {
+			if (origCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+			else process.env.GIT_CEILING_DIRECTORIES = origCeiling;
+		}
+	});
+});
