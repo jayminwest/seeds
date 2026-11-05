@@ -125,6 +125,28 @@ describe("sd close", () => {
 		expect(out.closed).toEqual([a, b]);
 	});
 
+	test("closing a plan's last child hints to close the still-open parent", async () => {
+		const parent = await createSeed("Parent", tmpDir);
+		const c1 = await createSeed("C1", tmpDir);
+		const c2 = await createSeed("C2", tmpDir);
+		const plan = await runJson<{ plan_id: string }>(["plan", "create", parent], tmpDir);
+		await run(["plan", "adopt", plan.plan_id, c1, c2], tmpDir);
+
+		type Out = { openPlanParents?: Array<{ plan: string; seed: string }> };
+		const first = await runJson<Out>(["close", c1], tmpDir);
+		expect(first.openPlanParents).toBeUndefined();
+		const last = await runJson<Out>(["close", c2], tmpDir);
+		expect(last.openPlanParents).toEqual([{ plan: plan.plan_id, seed: parent }]);
+
+		const human = await run(["update", c2, "--status", "open"], tmpDir);
+		expect(human.stderr).not.toContain("is done");
+		const again = await run(["close", c2], tmpDir);
+		expect(again.stderr).toContain(`Plan ${plan.plan_id} is done; parent ${parent} is still open`);
+
+		const parentClose = await run(["close", parent], tmpDir);
+		expect(parentClose.stderr).not.toContain("is done");
+	});
+
 	test("missing positional ids errors out", async () => {
 		const { exitCode, stderr } = await run(["close"], tmpDir);
 		expect(exitCode).not.toBe(0);

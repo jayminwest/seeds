@@ -14,6 +14,7 @@
 // All transitions happen under the plans-lock held by the caller (update.ts /
 // close.ts wrap their issue writes in `withLock(plansPath, () => withLock(issuesPath, ...))`).
 
+import { printWarning } from "./output.ts";
 import type { Issue, Plan, PlanStatus } from "./types.ts";
 
 export function computeNextPlanStatus(plan: Plan, planChildren: Issue[]): PlanStatus {
@@ -62,4 +63,33 @@ export function affectedPlanIds(plans: Plan[], issueIds: string[]): string[] {
 		if (p.children.some((cid) => ids.has(cid))) out.push(p.id);
 	}
 	return out;
+}
+
+export interface OpenPlanParent {
+	plan: string;
+	seed: string;
+}
+
+// Done plans whose parent seed is still open (audit-2026-11: plans reached done
+// while parents lingered). Closing the parent stays an explicit decision, so
+// close/update print a hint and prime lists them rather than auto-closing.
+export function openParentsOfDonePlans(
+	plans: Iterable<Plan>,
+	allIssues: Issue[],
+	onlyPlanIds?: Iterable<string>,
+): OpenPlanParent[] {
+	const only = onlyPlanIds ? new Set(onlyPlanIds) : null;
+	const openIds = new Set(allIssues.filter((i) => i.status !== "closed").map((i) => i.id));
+	const out: OpenPlanParent[] = [];
+	for (const p of plans) {
+		if (only && !only.has(p.id)) continue;
+		if (p.status === "done" && openIds.has(p.seed)) out.push({ plan: p.id, seed: p.seed });
+	}
+	return out;
+}
+
+export function printOpenPlanParentHints(parents: OpenPlanParent[]): void {
+	for (const { plan, seed } of parents) {
+		printWarning(`Plan ${plan} is done; parent ${seed} is still open — close it: sd close ${seed}`);
+	}
 }

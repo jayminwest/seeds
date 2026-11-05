@@ -3,8 +3,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { computeNextPlanStatus } from "../plan-lifecycle.ts";
+import { computeNextPlanStatus, openParentsOfDonePlans } from "../plan-lifecycle.ts";
 import { readIssues, readPlans, writeIssues, writePlans } from "../store.ts";
+import { runCli } from "../test-harness.ts";
 import type { Issue, Plan } from "../types.ts";
 import { run as closeRun } from "./close.ts";
 import { run as updateRun } from "./update.ts";
@@ -98,6 +99,33 @@ describe("computeNextPlanStatus — pure rules", () => {
 		const plan = makePlan("p1", "done", ["c1", "c2"]);
 		const children = [makeIssue("c1", "closed"), makeIssue("c2", "closed")];
 		expect(computeNextPlanStatus(plan, children)).toBe("done");
+	});
+});
+
+describe("openParentsOfDonePlans", () => {
+	test("lists done plans whose parent seed is open, honoring the plan filter", () => {
+		const plans = [
+			makePlan("pl-1", "done", ["c1"]),
+			makePlan("pl-2", "done", ["c2"]),
+			makePlan("pl-3", "active", ["c3"]),
+		];
+		const issues = [
+			makeIssue("seed-pl-1", "open"),
+			makeIssue("seed-pl-2", "closed"),
+			makeIssue("seed-pl-3", "open"),
+		];
+		expect(openParentsOfDonePlans(plans, issues)).toEqual([{ plan: "pl-1", seed: "seed-pl-1" }]);
+		expect(openParentsOfDonePlans(plans, issues, ["pl-2", "pl-3"])).toEqual([]);
+	});
+
+	test("update --status closed on the last child reports the open parent in JSON", async () => {
+		await seed(
+			[makePlan("pl-1", "active", ["c1"])],
+			[makeIssue("seed-pl-1", "open"), makeIssue("c1", "in_progress", { plan_id: "pl-1" })],
+		);
+		const { stdout } = await runCli(["update", "c1", "--status", "closed", "--json"], dir);
+		const out = JSON.parse(stdout) as { openPlanParents?: unknown };
+		expect(out.openPlanParents).toEqual([{ plan: "pl-1", seed: "seed-pl-1" }]);
 	});
 });
 

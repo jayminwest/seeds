@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
 import { outputJson } from "../output.ts";
 import { loadPlanContext } from "../plan-context.ts";
+import { openParentsOfDonePlans } from "../plan-lifecycle.ts";
 import { sortIssues } from "../sort.ts";
 import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -212,6 +213,8 @@ export interface PrimeIssueRef {
 
 export interface PrimeState {
 	inProgress: PrimeIssueRef[];
+	// Open seeds whose plan is done: their work landed, they just need closing.
+	openPlanParents: Array<PrimeIssueRef & { plan: string }>;
 	ready: PrimeIssueRef[];
 	readyCount: number;
 }
@@ -227,12 +230,20 @@ function ref(i: Issue): PrimeIssueRef {
 
 async function loadState(seedsDir: string): Promise<PrimeState> {
 	const issues = await readIssues(seedsDir);
-	const ready = sortIssues(readyIssues(issues, await loadPlanContext(seedsDir)), "priority");
+	const planCtx = await loadPlanContext(seedsDir);
+	const ready = sortIssues(readyIssues(issues, planCtx), "priority");
+	const byId = new Map(issues.map((i) => [i.id, i]));
+	const openPlanParents: PrimeState["openPlanParents"] = [];
+	for (const { plan, seed } of openParentsOfDonePlans(planCtx.plansById.values(), issues)) {
+		const parent = byId.get(seed);
+		if (parent) openPlanParents.push({ ...ref(parent), plan });
+	}
 	return {
 		inProgress: sortIssues(
 			issues.filter((i) => i.status === "in_progress"),
 			"priority",
 		).map(ref),
+		openPlanParents,
 		ready: ready.slice(0, READY_LIMIT).map(ref),
 		readyCount: ready.length,
 	};
@@ -248,6 +259,11 @@ export function renderState(state: PrimeState): string {
 	if (state.inProgress.length > 0) {
 		lines.push("In progress:");
 		for (const r of state.inProgress) lines.push(refLine(r));
+		lines.push("");
+	}
+	if (state.openPlanParents.length > 0) {
+		lines.push("Plan done, parent still open (sd close it):");
+		for (const r of state.openPlanParents) lines.push(`${refLine(r)} [${r.plan} done]`);
 		lines.push("");
 	}
 	if (state.readyCount === 0) {

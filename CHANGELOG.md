@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Plan parents no longer linger silently: when `sd close` / `sd update --status` leaves a plan `done` while its parent seed is still open, the command prints a `sd close <parent>` hint (stderr) and `--json` adds `openPlanParents: [{plan, seed}]`. `sd prime` live state lists such parents under "Plan done, parent still open" (`state.openPlanParents` in `--json`). Closing stays explicit. (seeds-5671)
+
 ### Fixed
 - `sd list` no longer truncates silently. `--json` and `--format ids` are uncapped by default (consumers treat them as the complete set); human formats still cap at 50 but the footer reads `50 of N issue(s) shown (use --limit 0 for all)` (compact writes it to stderr). `list --json` adds `total` (pre-limit count) and `truncated`. `--limit 0` now means "no limit" for `list`, `ready`, and `search` instead of returning zero rows. (seeds-dd20)
 

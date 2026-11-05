@@ -2,7 +2,13 @@ import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { collect, collectRepeated, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
-import { affectedPlanIds, applyPlanTransitions } from "../plan-lifecycle.ts";
+import {
+	affectedPlanIds,
+	applyPlanTransitions,
+	type OpenPlanParent,
+	openParentsOfDonePlans,
+	printOpenPlanParentHints,
+} from "../plan-lifecycle.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import {
 	issuesPath,
@@ -84,6 +90,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	let updated: Issue | undefined;
+	let openPlanParents: OpenPlanParent[] = [];
 
 	const claim = flags.claim === true;
 	const claimant = claim ? resolveClaimant(flags) : undefined;
@@ -212,6 +219,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (affected.length > 0) {
 				const changedCount = applyPlanTransitions(plans, issues, affected, now);
 				if (changedCount > 0) await writePlans(dir, plans);
+				openPlanParents = openParentsOfDonePlans(plans, issues, affected);
 			}
 		}
 	};
@@ -224,9 +232,15 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	if (jsonMode) {
-		await outputJson({ success: true, command: "update", issue: updated });
+		await outputJson({
+			success: true,
+			command: "update",
+			issue: updated,
+			...(openPlanParents.length > 0 ? { openPlanParents } : {}),
+		});
 	} else {
 		printSuccess(`Updated ${id}`);
+		printOpenPlanParentHints(openPlanParents);
 	}
 }
 

@@ -1,7 +1,13 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { outputJson, printSuccess } from "../output.ts";
-import { affectedPlanIds, applyPlanTransitions } from "../plan-lifecycle.ts";
+import {
+	affectedPlanIds,
+	applyPlanTransitions,
+	type OpenPlanParent,
+	openParentsOfDonePlans,
+	printOpenPlanParentHints,
+} from "../plan-lifecycle.ts";
 import {
 	issuesPath,
 	plansPath,
@@ -58,6 +64,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const closed: string[] = [];
+	let openPlanParents: OpenPlanParent[] = [];
 
 	// Lock order matches plan-submit: plans (outer) → issues (inner) so plan
 	// lifecycle transitions stay atomic with the close write.
@@ -97,16 +104,23 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (affected.length > 0) {
 				const changedCount = applyPlanTransitions(plans, issues, affected, now);
 				if (changedCount > 0) await writePlans(dir, plans);
+				openPlanParents = openParentsOfDonePlans(plans, issues, affected);
 			}
 		}),
 	);
 
 	if (jsonMode) {
-		await outputJson({ success: true, command: "close", closed });
+		await outputJson({
+			success: true,
+			command: "close",
+			closed,
+			...(openPlanParents.length > 0 ? { openPlanParents } : {}),
+		});
 	} else {
 		for (const id of closed) {
 			printSuccess(`Closed ${id}${reason ? ` — ${reason}` : ""}`);
 		}
+		printOpenPlanParentHints(openPlanParents);
 	}
 }
 

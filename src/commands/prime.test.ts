@@ -249,6 +249,37 @@ describe("sd prime", () => {
 		expect(stdout).not.toContain("In progress:");
 	});
 
+	test("live state flags open seeds whose plan is done", async () => {
+		await initSeeds(tmpDir);
+		const idOf = async (title: string) =>
+			(
+				JSON.parse((await run(["create", "--title", title, "--json"], tmpDir)).stdout) as {
+					id: string;
+				}
+			).id;
+		const parent = await idOf("Parent");
+		const child = await idOf("Child");
+		const created = await run(["plan", "create", parent, "--json"], tmpDir);
+		const { plan_id } = JSON.parse(created.stdout) as { plan_id: string };
+		await run(["plan", "adopt", plan_id, child], tmpDir);
+		const before = await run(["prime", "--compact"], tmpDir);
+		expect(before.stdout).not.toContain("Plan done, parent still open");
+
+		await run(["close", child], tmpDir);
+		const { stdout } = await run(["prime", "--compact"], tmpDir);
+		expect(stdout).toContain("Plan done, parent still open (sd close it):");
+		expect(stdout).toContain(`- ${parent} P2 Parent [${plan_id} done]`);
+		const json = await run(["prime", "--json"], tmpDir);
+		const { state } = JSON.parse(json.stdout) as {
+			state: { openPlanParents: Array<{ id: string; plan: string }> };
+		};
+		expect(state.openPlanParents).toEqual([expect.objectContaining({ id: parent, plan: plan_id })]);
+
+		await run(["close", parent], tmpDir);
+		const after = await run(["prime", "--compact"], tmpDir);
+		expect(after.stdout).not.toContain("Plan done, parent still open");
+	});
+
 	test("--export omits live state", async () => {
 		await initSeeds(tmpDir);
 		await run(["create", "--title", "One"], tmpDir);
