@@ -174,20 +174,16 @@ bare marker. Accepted prefixes:
 
 ### Log sanitization
 
-Two channels, kept distinct. **User output** flows through
-`src/output.ts` (chalk-formatted prints and the `--json` contract).
-**Diagnostics** flow through `src/log.ts` — a pino logger configured with
-a `redact` pass (`remove: true`) covering `password`, `token`, `apiKey`,
-`secret`, `authorization` (bare and one-level `*.` nested), plus
-`headers.cookie` / `headers.authorization`. The logger is silent at the
-default `info` level; set `SEEDS_DEBUG=1` (or `SEEDS_LOG_LEVEL=debug`) to
-surface debug lines.
+All output flows through `src/output.ts` (chalk-formatted prints and the
+`--json` contract); there is no separate logger. The only diagnostic hook is
+`SEEDS_DEBUG=1`, which makes the top-level error handler
+(`src/error-handler.ts`) print the failing error's stack to stderr. Stdout
+stays reserved for command output, so `--json` remains parseable.
 
 Sensitive values that may appear in arguments or environment (npm tokens,
 GitHub PATs, API keys) must never be printed. Never `console.log` a raw
 config object, token, or full environment from a command handler — route
-user-facing output through `src/output.ts` and diagnostics through
-`src/log.ts` so secrets stay scrubbed and the `--json` contract stays
+user-facing output through `src/output.ts` so the `--json` contract stays
 consistent.
 
 ## Agent Workflow

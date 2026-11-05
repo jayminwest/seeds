@@ -380,15 +380,25 @@ describe("withLock", () => {
 	});
 
 	test("serializes concurrent operations", async () => {
-		// Run multiple concurrent withLock calls and verify they all succeed
+		// The critical section must span an await: a synchronous body would
+		// pass with no lock at all (seeds-8f00). A read-await-write counter
+		// loses updates unless each claimant waits for the previous release.
 		let counter = 0;
+		let inside = 0;
+		let maxInside = 0;
 		await Promise.all(
 			Array.from({ length: 5 }, () =>
 				withLock(seedsDir, async () => {
-					counter++;
+					inside++;
+					maxInside = Math.max(maxInside, inside);
+					const seen = counter;
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					counter = seen + 1;
+					inside--;
 				}),
 			),
 		);
+		expect(maxInside).toBe(1);
 		expect(counter).toBe(5);
 	});
 
