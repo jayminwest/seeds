@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
+import { assertNoCycles } from "../dep-graph.ts";
 import { accent, muted, outputJson, printIssueOneLine } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -80,6 +81,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (!dep) throw new Error(`Issue not found: ${dependsOnId}`);
 
 			if (subcmd === "add") {
+				assertNoCycles(issues, [[issueId, dependsOnId]]);
 				const blockedBy = Array.from(new Set([...(issue.blockedBy ?? []), dependsOnId]));
 				const depBlocks = Array.from(new Set([...(dep.blocks ?? []), issueId]));
 				issues[issueIdx] = { ...issue, blockedBy, updatedAt: new Date().toISOString() };

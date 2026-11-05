@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
 import { Command } from "commander";
 import { findSeedsDir, loadPlanTemplates, readConfig } from "../config.ts";
+import { assertNoCycles, planEdges } from "../dep-graph.ts";
 import { generateId } from "../id.ts";
 import { accent, brand, muted, outputFailure, outputJson, printSuccess } from "../output.ts";
 import { applyPlanBackref, buildPlanBackref, stripPlanBackref } from "../plan-backref.ts";
@@ -611,9 +612,8 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 	let planStatus: PlanStatus = "approved";
 	let planReviewedBy: string | undefined;
 
-	// Combined lock: hold plans + issues while we read and write both.
-	// Order: outer lock = plans, inner = issues. Same across submit/validate
-	// to avoid deadlocks.
+	// Combined lock: hold plans + issues while we read and write both. Order:
+	// outer = plans, inner = issues, same across submit/validate (no deadlocks).
 	await withLock(plansPath(dir), async () => {
 		await withLock(issuesPath(dir), async () => {
 			const allIssues = await readIssues(dir);
@@ -651,6 +651,7 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 					name: explicitName ?? existingPlan.name ?? normalizePlanName(seed.title),
 					now,
 				});
+				assertNoCycles(allIssues, planEdges(seed.id, result.finalChildIds, steps));
 				await writeIssues(dir, allIssues);
 				await writePlans(dir, allPlans);
 				createdPlanId = existingPlan.id;
@@ -810,8 +811,7 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 				updateChildField(i, "blocks", seedId);
 			}
 
-			// Parent seed picks up every child as a blocker. Dedupe so an
-			// adopted seed the parent already depended on doesn't double up.
+			// Parent seed picks up every child as a blocker (deduped vs. prior adoptions).
 			const dedupedBlockedBy = [...(seed.blockedBy ?? [])];
 			for (const cid of finalChildIds) {
 				if (!dedupedBlockedBy.includes(cid)) dedupedBlockedBy.push(cid);
@@ -843,6 +843,7 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 			const submitAdopted = [...adoptions.values()].map((a) => a.seedId);
 			if (submitAdopted.length > 0) plan.adoptedChildren = submitAdopted;
 
+			assertNoCycles([...allIssues, ...newIssues], planEdges(seedId, finalChildIds, steps));
 			await writeIssues(dir, [...allIssues, ...newIssues]);
 
 			const draftIdx = allPlans.findIndex((p) => p.seed === seedId && p.status === "draft");
@@ -1816,7 +1817,7 @@ async function runAdopt(planIdArg: string, seedIds: string[], opts: AdoptOptions
 				updatedAt: now,
 			};
 			allPlans[planIdx] = updatedPlan;
-
+			assertNoCycles(allIssues, planEdges(parentSeed.id, insertedIds));
 			await writeIssues(dir, allIssues);
 			await writePlans(dir, allPlans);
 
