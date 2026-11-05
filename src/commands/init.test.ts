@@ -62,6 +62,7 @@ describe("sd init", () => {
 			".seeds/issues.jsonl.lock",
 			".seeds/issues.jsonl.tmp.0a1b2c3d",
 			".seeds/plans.jsonl.lock.stale.0011223344556677",
+			".seeds/issues.jsonl.bak",
 		];
 		const res = Bun.spawnSync(["git", "check-ignore", ...leftovers], { cwd: tmpDir });
 		expect(res.stdout.toString().trim().split("\n")).toEqual(leftovers);

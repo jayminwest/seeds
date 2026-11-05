@@ -1,20 +1,23 @@
-import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
+import {
+	inspectLocks,
+	JSONL_FILES,
+	readRawLines,
+	removeStaleLocks,
+	rewriteJsonl,
+	rowsWithId,
+	serializeLines,
+} from "../doctor-store.ts";
 import { dedupKey, findIdCollisions } from "../id-collisions.ts";
 import { ensureMergeStrategy, inspectMergeStrategy } from "../merge-strategy.ts";
 import { brand, muted, outputJson } from "../output.ts";
 import { readIssues, readPlans } from "../store.ts";
-import type { Issue, Plan, Template } from "../types.ts";
-import {
-	ISSUES_FILE,
-	LOCK_STALE_MS,
-	TEMPLATES_FILE,
-	VALID_STATUSES,
-	VALID_TYPES,
-} from "../types.ts";
+import type { Issue, Plan } from "../types.ts";
+import { ISSUES_FILE, VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
 interface DoctorCheck {
 	name: string;
@@ -22,30 +25,6 @@ interface DoctorCheck {
 	message: string;
 	details: string[];
 	fixable: boolean;
-}
-
-interface RawLine {
-	lineNumber: number;
-	text: string;
-	parsed?: unknown;
-	error?: string;
-}
-
-function readRawLines(filePath: string): RawLine[] {
-	if (!existsSync(filePath)) return [];
-	const content = readFileSync(filePath, "utf8");
-	const lines: RawLine[] = [];
-	for (const [i, raw] of content.split("\n").entries()) {
-		const text = raw.trim();
-		if (!text) continue;
-		try {
-			lines.push({ lineNumber: i + 1, text, parsed: JSON.parse(text) });
-		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : String(err);
-			lines.push({ lineNumber: i + 1, text, error: msg });
-		}
-	}
-	return lines;
 }
 
 function checkConfig(seedsDir: string, config: { project: string } | null): DoctorCheck {
@@ -87,7 +66,7 @@ function checkConfig(seedsDir: string, config: { project: string } | null): Doct
 
 function checkJsonlIntegrity(seedsDir: string): DoctorCheck {
 	const details: string[] = [];
-	for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
+	for (const file of JSONL_FILES) {
 		const lines = readRawLines(join(seedsDir, file));
 		for (const line of lines) {
 			if (line.error) {
@@ -169,7 +148,7 @@ function checkSchemaValidation(seedsDir: string): DoctorCheck {
 function checkDuplicateIds(seedsDir: string): DoctorCheck {
 	const details: string[] = [];
 	let collided = 0;
-	for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
+	for (const file of JSONL_FILES) {
 		const lines = readRawLines(join(seedsDir, file));
 		const collisions = findIdCollisions(lines.map((l) => l.parsed));
 		collided += collisions.size;
@@ -503,25 +482,14 @@ function checkClosedFieldsConsistency(seedsDir: string): DoctorCheck {
 }
 
 function checkStaleLocks(seedsDir: string): DoctorCheck {
-	const details: string[] = [];
-	for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
-		const lockPath = join(seedsDir, `${file}.lock`);
-		if (existsSync(lockPath)) {
-			try {
-				const st = statSync(lockPath);
-				const age = Date.now() - st.mtimeMs;
-				if (age > LOCK_STALE_MS) {
-					details.push(`${file}.lock is stale (${String(Math.round(age / 1000))}s old)`);
-				} else {
-					details.push(
-						`${file}.lock exists (${String(Math.round(age / 1000))}s old, may be active)`,
-					);
-				}
-			} catch {
-				details.push(`${file}.lock exists but cannot stat`);
-			}
-		}
-	}
+	// seeds-499f: isLockStale() also flags fresh locks whose same-host owner is dead
+	const details = inspectLocks(seedsDir).map(({ file, state, ageSec }) =>
+		state === "unreadable"
+			? `${file}.lock exists but cannot stat`
+			: state === "stale"
+				? `${file}.lock is stale (${String(ageSec)}s old)`
+				: `${file}.lock exists (${String(ageSec)}s old, may be active)`,
+	);
 	if (details.length > 0) {
 		return {
 			name: "stale-locks",
@@ -560,7 +528,7 @@ function checkGitattributes(seedsDir: string): DoctorCheck {
 	};
 }
 
-function applyFixes(seedsDir: string, checks: DoctorCheck[]): string[] {
+async function applyFixes(seedsDir: string, checks: DoctorCheck[]): Promise<string[]> {
 	const fixed: string[] = [];
 
 	for (const check of checks) {
@@ -568,62 +536,36 @@ function applyFixes(seedsDir: string, checks: DoctorCheck[]): string[] {
 
 		switch (check.name) {
 			case "jsonl-integrity": {
-				for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
-					const filePath = join(seedsDir, file);
-					if (!existsSync(filePath)) continue;
-					const lines = readRawLines(filePath);
-					const validLines = lines.filter((l) => !l.error);
-					if (validLines.length < lines.length) {
-						const content =
-							validLines.length > 0 ? `${validLines.map((l) => l.text).join("\n")}\n` : "";
-						writeFileSync(filePath, content);
-						fixed.push(
-							`Removed ${String(lines.length - validLines.length)} malformed line(s) from ${file}`,
-						);
-					}
-				}
+				await fixMalformedLines(seedsDir, fixed);
 				break;
 			}
 			case "duplicate-ids": {
 				// Dedup edits (last wins); id collisions keep every distinct item
-				fixDuplicates(seedsDir, fixed);
+				await fixDuplicates(seedsDir, fixed);
 				break;
 			}
 			case "referential-integrity": {
-				fixDanglingRefs(seedsDir, fixed);
+				await fixDanglingRefs(seedsDir, fixed);
 				break;
 			}
 			case "bidirectional-consistency": {
-				fixBidirectional(seedsDir, fixed);
+				await fixBidirectional(seedsDir, fixed);
 				break;
 			}
 			case "stale-locks": {
-				for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
-					const lockPath = join(seedsDir, `${file}.lock`);
-					if (existsSync(lockPath)) {
-						try {
-							const st = statSync(lockPath);
-							if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
-								unlinkSync(lockPath);
-								fixed.push(`Removed stale ${file}.lock`);
-							}
-						} catch {
-							// best-effort
-						}
-					}
-				}
+				for (const file of removeStaleLocks(seedsDir)) fixed.push(`Removed stale ${file}.lock`);
 				break;
 			}
 			case "label-schema": {
-				fixLabelSchema(seedsDir, fixed);
+				await fixLabelSchema(seedsDir, fixed);
 				break;
 			}
 			case "extensions-schema": {
-				fixExtensionsSchema(seedsDir, fixed);
+				await fixExtensionsSchema(seedsDir, fixed);
 				break;
 			}
 			case "closed-fields-consistency": {
-				fixClosedFieldsConsistency(seedsDir, fixed);
+				await fixClosedFieldsConsistency(seedsDir, fixed);
 				break;
 			}
 			case "gitattributes": {
@@ -635,215 +577,157 @@ function applyFixes(seedsDir: string, checks: DoctorCheck[]): string[] {
 	return fixed;
 }
 
-function fixLabelSchema(seedsDir: string, fixed: string[]): void {
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const idMap = new Map<string, Issue>();
-	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			idMap.set(issue.id, issue);
+// Every fixer below rewrites through rewriteJsonl (locked, atomic) and edits rows in
+// place, so rows it does not touch survive byte-for-byte in meaning (seeds-499f).
+
+async function fixMalformedLines(seedsDir: string, fixed: string[]): Promise<void> {
+	for (const file of JSONL_FILES) {
+		let dropped = 0;
+		const changed = await rewriteJsonl(
+			seedsDir,
+			file,
+			(lines) => {
+				const valid = lines.filter((l) => l.error === undefined);
+				dropped = lines.length - valid.length;
+				return dropped > 0 ? valid.map((l) => l.text) : null;
+			},
+			{ backup: true },
+		);
+		if (changed) {
+			fixed.push(`Removed ${String(dropped)} malformed line(s) from ${file} (backup: ${file}.bak)`);
 		}
 	}
-	const issues = Array.from(idMap.values());
-	let changed = false;
-	for (const issue of issues) {
-		if (issue.labels !== undefined) {
+}
+
+async function fixLabelSchema(seedsDir: string, fixed: string[]): Promise<void> {
+	const changed = await rewriteJsonl(seedsDir, ISSUES_FILE, (lines) => {
+		let dirty = false;
+		for (const issue of rowsWithId<Issue>(lines)) {
+			if (issue.labels === undefined) continue;
 			if (!Array.isArray(issue.labels)) {
 				issue.labels = undefined;
-				changed = true;
-			} else {
-				const cleaned = issue.labels.filter(
-					(l): l is string => typeof l === "string" && l.trim() !== "",
-				);
-				if (cleaned.length !== issue.labels.length) {
-					issue.labels = cleaned.length > 0 ? cleaned : undefined;
-					changed = true;
+				dirty = true;
+				continue;
+			}
+			const cleaned = issue.labels.filter(
+				(l): l is string => typeof l === "string" && l.trim() !== "",
+			);
+			if (cleaned.length !== issue.labels.length) {
+				issue.labels = cleaned.length > 0 ? cleaned : undefined;
+				dirty = true;
+			}
+		}
+		return dirty ? serializeLines(lines) : null;
+	});
+	if (changed) fixed.push("Cleaned up invalid label entries");
+}
+
+async function fixExtensionsSchema(seedsDir: string, fixed: string[]): Promise<void> {
+	const changed = await rewriteJsonl(seedsDir, ISSUES_FILE, (lines) => {
+		let dirty = false;
+		for (const issue of rowsWithId<Issue>(lines)) {
+			const ext = issue.extensions as unknown;
+			if (ext === undefined) continue;
+			if (ext === null || typeof ext !== "object" || Array.isArray(ext)) {
+				issue.extensions = undefined;
+				dirty = true;
+			}
+		}
+		return dirty ? serializeLines(lines) : null;
+	});
+	if (changed) fixed.push("Dropped malformed extensions fields");
+}
+
+async function fixClosedFieldsConsistency(seedsDir: string, fixed: string[]): Promise<void> {
+	const changed = await rewriteJsonl(seedsDir, ISSUES_FILE, (lines) => {
+		let dirty = false;
+		for (const issue of rowsWithId<Issue>(lines)) {
+			if (issue.status !== "closed") {
+				if (issue.closedAt !== undefined || issue.closeReason !== undefined) {
+					issue.closedAt = undefined;
+					issue.closeReason = undefined;
+					dirty = true;
+				}
+			} else if (!issue.closedAt) {
+				issue.closedAt = issue.updatedAt;
+				dirty = true;
+			}
+		}
+		return dirty ? serializeLines(lines) : null;
+	});
+	if (changed) fixed.push("Repaired status/close-metadata mismatches");
+}
+
+async function fixDuplicates(seedsDir: string, fixed: string[]): Promise<void> {
+	for (const file of JSONL_FILES) {
+		const changed = await rewriteJsonl(
+			seedsDir,
+			file,
+			(lines) => {
+				// Dedup edits (last wins, first position); id collisions keep every distinct
+				// item; rows without an id and malformed lines are never dropped here.
+				const collisions = findIdCollisions(lines.map((l) => l.parsed));
+				const kept = new Map<string, string>();
+				for (const line of lines) {
+					const [row] = rowsWithId<{ id: string; createdAt?: unknown }>([line]);
+					const key = row ? dedupKey(row, collisions) : `\u0001${String(line.lineNumber)}`;
+					kept.set(key, line.text);
+				}
+				return kept.size < lines.length ? Array.from(kept.values()) : null;
+			},
+			{ backup: true },
+		);
+		if (changed) fixed.push(`Deduplicated ${file} (backup: ${file}.bak)`);
+	}
+}
+
+async function fixDanglingRefs(seedsDir: string, fixed: string[]): Promise<void> {
+	const changed = await rewriteJsonl(seedsDir, ISSUES_FILE, (lines) => {
+		const issues = rowsWithId<Issue>(lines);
+		const ids = new Set(issues.map((i) => i.id));
+		let dirty = false;
+		for (const issue of issues) {
+			const before = (issue.blockedBy?.length ?? 0) + (issue.blocks?.length ?? 0);
+			if (issue.blockedBy) {
+				issue.blockedBy = issue.blockedBy.filter((ref) => ids.has(ref));
+				if (issue.blockedBy.length === 0) issue.blockedBy = undefined;
+			}
+			if (issue.blocks) {
+				issue.blocks = issue.blocks.filter((ref) => ids.has(ref));
+				if (issue.blocks.length === 0) issue.blocks = undefined;
+			}
+			if ((issue.blockedBy?.length ?? 0) + (issue.blocks?.length ?? 0) !== before) dirty = true;
+		}
+		return dirty ? serializeLines(lines) : null;
+	});
+	if (changed) fixed.push("Removed dangling dependency references");
+}
+
+async function fixBidirectional(seedsDir: string, fixed: string[]): Promise<void> {
+	const changed = await rewriteJsonl(seedsDir, ISSUES_FILE, (lines) => {
+		// Last occurrence wins, matching what readIssues() returns
+		const idMap = new Map<string, Issue>();
+		for (const issue of rowsWithId<Issue>(lines)) idMap.set(issue.id, issue);
+		let dirty = false;
+		for (const issue of idMap.values()) {
+			for (const ref of issue.blockedBy ?? []) {
+				const target = idMap.get(ref);
+				if (target && !(target.blocks ?? []).includes(issue.id)) {
+					target.blocks = [...(target.blocks ?? []), issue.id];
+					dirty = true;
+				}
+			}
+			for (const ref of issue.blocks ?? []) {
+				const target = idMap.get(ref);
+				if (target && !(target.blockedBy ?? []).includes(issue.id)) {
+					target.blockedBy = [...(target.blockedBy ?? []), issue.id];
+					dirty = true;
 				}
 			}
 		}
-	}
-	if (changed) {
-		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Cleaned up invalid label entries");
-	}
-}
-
-function fixExtensionsSchema(seedsDir: string, fixed: string[]): void {
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const idMap = new Map<string, Issue>();
-	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			idMap.set(issue.id, issue);
-		}
-	}
-	const issues = Array.from(idMap.values());
-	let changed = false;
-	for (const issue of issues) {
-		const ext = issue.extensions as unknown;
-		if (ext === undefined) continue;
-		if (ext === null || typeof ext !== "object" || Array.isArray(ext)) {
-			issue.extensions = undefined;
-			changed = true;
-		}
-	}
-	if (changed) {
-		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Dropped malformed extensions fields");
-	}
-}
-
-function fixClosedFieldsConsistency(seedsDir: string, fixed: string[]): void {
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const idMap = new Map<string, Issue>();
-	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			idMap.set(issue.id, issue);
-		}
-	}
-	const issues = Array.from(idMap.values());
-	let changed = false;
-	for (const issue of issues) {
-		if (issue.status !== "closed") {
-			if (issue.closedAt !== undefined || issue.closeReason !== undefined) {
-				issue.closedAt = undefined;
-				issue.closeReason = undefined;
-				changed = true;
-			}
-		} else if (!issue.closedAt) {
-			issue.closedAt = issue.updatedAt;
-			changed = true;
-		}
-	}
-	if (changed) {
-		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Repaired status/close-metadata mismatches");
-	}
-}
-
-function fixDuplicates(seedsDir: string, fixed: string[]): void {
-	// Issues
-	const issueLines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const issueCollisions = findIdCollisions(issueLines.map((l) => l.parsed));
-	const issueMap = new Map<string, Issue>();
-	for (const line of issueLines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			issueMap.set(dedupKey(issue, issueCollisions), issue);
-		}
-	}
-	if (issueMap.size < issueLines.filter((l) => l.parsed).length) {
-		const content = `${Array.from(issueMap.values())
-			.map((i) => JSON.stringify(i))
-			.join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Deduplicated issues.jsonl");
-	}
-
-	// Templates
-	const tplLines = readRawLines(join(seedsDir, TEMPLATES_FILE));
-	const tplCollisions = findIdCollisions(tplLines.map((l) => l.parsed));
-	const tplMap = new Map<string, Template>();
-	for (const line of tplLines) {
-		if (!line.parsed) continue;
-		const tpl = line.parsed as Template;
-		if (typeof tpl.id === "string") {
-			tplMap.set(dedupKey(tpl, tplCollisions), tpl);
-		}
-	}
-	if (tplMap.size < tplLines.filter((l) => l.parsed).length) {
-		const content = `${Array.from(tplMap.values())
-			.map((t) => JSON.stringify(t))
-			.join("\n")}\n`;
-		writeFileSync(join(seedsDir, TEMPLATES_FILE), content);
-		fixed.push("Deduplicated templates.jsonl");
-	}
-}
-
-function fixDanglingRefs(seedsDir: string, fixed: string[]): void {
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const issues: Issue[] = [];
-	const idMap = new Map<string, Issue>();
-	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			idMap.set(issue.id, issue);
-		}
-	}
-	// Dedup: last wins
-	const deduped = Array.from(idMap.values());
-	const ids = new Set(deduped.map((i) => i.id));
-	let changed = false;
-	for (const issue of deduped) {
-		const origBlockedBy = issue.blockedBy?.length ?? 0;
-		const origBlocks = issue.blocks?.length ?? 0;
-		if (issue.blockedBy) {
-			issue.blockedBy = issue.blockedBy.filter((ref) => ids.has(ref));
-			if (issue.blockedBy.length === 0) issue.blockedBy = undefined;
-		}
-		if (issue.blocks) {
-			issue.blocks = issue.blocks.filter((ref) => ids.has(ref));
-			if (issue.blocks.length === 0) issue.blocks = undefined;
-		}
-		if (
-			(issue.blockedBy?.length ?? 0) !== origBlockedBy ||
-			(issue.blocks?.length ?? 0) !== origBlocks
-		) {
-			changed = true;
-		}
-		issues.push(issue);
-	}
-	if (changed) {
-		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Removed dangling dependency references");
-	}
-}
-
-function fixBidirectional(seedsDir: string, fixed: string[]): void {
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	const idMap = new Map<string, Issue>();
-	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Issue;
-		if (typeof issue.id === "string") {
-			idMap.set(issue.id, issue);
-		}
-	}
-	const issues = Array.from(idMap.values());
-	let changed = false;
-
-	for (const issue of issues) {
-		for (const ref of issue.blockedBy ?? []) {
-			const target = idMap.get(ref);
-			if (target && !(target.blocks ?? []).includes(issue.id)) {
-				target.blocks = [...(target.blocks ?? []), issue.id];
-				changed = true;
-			}
-		}
-		for (const ref of issue.blocks ?? []) {
-			const target = idMap.get(ref);
-			if (target && !(target.blockedBy ?? []).includes(issue.id)) {
-				target.blockedBy = [...(target.blockedBy ?? []), issue.id];
-				changed = true;
-			}
-		}
-	}
-
-	if (changed) {
-		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
-		writeFileSync(join(seedsDir, ISSUES_FILE), content);
-		fixed.push("Added missing bidirectional dependency links");
-	}
+		return dirty ? serializeLines(lines) : null;
+	});
+	if (changed) fixed.push("Added missing bidirectional dependency links");
 }
 
 function printCheck(check: DoctorCheck, verbose: boolean): void {
@@ -908,7 +792,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	if (fixMode) {
 		const fixableFailures = checks.filter((ch) => ch.fixable && ch.status !== "pass");
 		if (fixableFailures.length > 0) {
-			const fixedItems = applyFixes(dir, checks);
+			const fixedItems = await applyFixes(dir, checks);
 
 			// Re-run all checks after fixes
 			const reChecks: DoctorCheck[] = [];

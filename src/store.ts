@@ -49,31 +49,36 @@ function bestEffortUnlink(path: string): void {
  * (ino + mtime). If it isn't, another claimant has already cycled the
  * lock — we restore the sidecar atomically so we don't drop their
  * (now-fresh) lock. We never call `unlinkSync(lock)` directly, so we can
- * no longer delete a path we don't own.
+ * no longer delete a path we don't own. Returns true when the stale inode we
+ * observed was the one removed.
  */
-function reclaimStaleLock(lock: string, originalStat: { ino: number; mtimeMs: number }): void {
+export function reclaimStaleLock(
+	lock: string,
+	originalStat: { ino: number; mtimeMs: number },
+): boolean {
 	const sidecar = `${lock}.stale.${randomBytes(8).toString("hex")}`;
 	try {
 		renameSync(lock, sidecar);
 	} catch {
-		return; // another claimant won the rename; outer loop retries
+		return false; // another claimant won the rename; outer loop retries
 	}
 	let stSidecar: { ino: number; mtimeMs: number };
 	try {
 		stSidecar = statSync(sidecar);
 	} catch {
 		bestEffortUnlink(sidecar);
-		return;
+		return false;
 	}
 	if (stSidecar.ino === originalStat.ino && stSidecar.mtimeMs === originalStat.mtimeMs) {
 		bestEffortUnlink(sidecar);
-		return;
+		return true;
 	}
 	try {
 		renameSync(sidecar, lock);
 	} catch {
 		bestEffortUnlink(sidecar);
 	}
+	return false;
 }
 
 /** Owner record written into every lock file by its holder. */
