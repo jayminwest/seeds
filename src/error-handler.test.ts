@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { handleTopLevelError } from "./error-handler.ts";
+import { Command, CommanderError } from "commander";
+import { handleTopLevelError, routeCommanderErrors } from "./error-handler.ts";
 
 describe("handleTopLevelError", () => {
 	beforeEach(() => {
@@ -106,5 +107,88 @@ describe("handleTopLevelError", () => {
 		expect(calls[0]?.msg).toBe("command failed");
 		expect((calls[0]?.obj as { err: unknown; cmd: string }).cmd).toBe("list");
 		expect((calls[0]?.obj as { err: unknown; cmd: string }).err).toBe(err);
+	});
+});
+
+describe("commander errors (seeds-cb18)", () => {
+	beforeEach(() => {
+		process.exitCode = 0;
+	});
+	afterEach(() => {
+		process.exitCode = 0;
+	});
+
+	const quiet = {
+		loadLogger: async () => ({ log: { debug: () => {} } }),
+		writeStderr: () => {},
+	};
+
+	async function jsonFor(err: unknown, cmd: string | undefined): Promise<Record<string, unknown>> {
+		const writes: string[] = [];
+		await handleTopLevelError(err, {
+			jsonMode: true,
+			cmd,
+			...quiet,
+			write: (s) => {
+				writes.push(s);
+			},
+		});
+		return JSON.parse(writes[0] ?? "") as Record<string, unknown>;
+	}
+
+	test("strips commander's 'error: ' prefix", async () => {
+		const err = new CommanderError(1, "commander.unknownOption", "error: unknown option '--x'");
+		expect(await jsonFor(err, "create")).toEqual({
+			success: false,
+			command: "create",
+			error: "unknown option '--x'",
+		});
+		expect(process.exitCode).toBe(1);
+	});
+
+	test("missing subcommand help maps to a readable message", async () => {
+		const err = new CommanderError(1, "commander.help", "(outputHelp)");
+		expect((await jsonFor(err, "dep")).error).toBe(
+			"missing subcommand. Run 'sd dep --help' for usage.",
+		);
+		expect((await jsonFor(err, "--json")).error).toBe(
+			"missing command. Run 'sd --help' for usage.",
+		);
+	});
+
+	test("exit-0 commander errors (--help/--version) are silent successes", async () => {
+		const writes: string[] = [];
+		process.exitCode = 1;
+		await handleTopLevelError(new CommanderError(0, "commander.helpDisplayed", "(outputHelp)"), {
+			jsonMode: true,
+			cmd: "create",
+			...quiet,
+			write: (s) => {
+				writes.push(s);
+			},
+		});
+		expect(writes).toHaveLength(0);
+		expect(process.exitCode).toBe(0);
+	});
+
+	test("routeCommanderErrors makes nested subcommands throw without writing", async () => {
+		const program = new Command();
+		const errOut: string[] = [];
+		program.configureOutput({ writeErr: (s) => errOut.push(s) });
+		const parent = program.command("plan");
+		parent
+			.command("show")
+			.argument("<id>")
+			.action(() => {});
+		routeCommanderErrors(program);
+		let thrown: unknown;
+		try {
+			await program.parseAsync(["bun", "sd", "plan", "show"]);
+		} catch (e) {
+			thrown = e;
+		}
+		expect(thrown).toBeInstanceOf(CommanderError);
+		expect((thrown as CommanderError).message).toBe("error: missing required argument 'id'");
+		expect(errOut).toHaveLength(0);
 	});
 });

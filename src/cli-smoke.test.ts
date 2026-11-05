@@ -129,6 +129,26 @@ describe("sd CLI smoke", () => {
 		}
 	});
 
+	test("commander-level errors with --json emit the envelope on stdout (seeds-cb18)", async () => {
+		// Missing required option is raised by commander itself, before any
+		// action runs; without exitOverride it would print plain text to stderr.
+		const cwd = await mkdtemp(join(tmpdir(), "seeds-smoke-"));
+		try {
+			await run(["init"], cwd);
+			const { stdout, stderr, exitCode } = await run(["create", "--json"], cwd);
+			expect(exitCode).toBe(1);
+			expect(stderr).toBe("");
+			const parsed = JSON.parse(stdout) as { success: boolean; command: string; error: string };
+			expect(parsed).toEqual({
+				success: false,
+				command: "create",
+				error: "required option '--title <text>' not specified",
+			});
+		} finally {
+			await rm(cwd, { recursive: true, force: true });
+		}
+	});
+
 	test("end-to-end init → create → list works through the real binary", async () => {
 		const cwd = await mkdtemp(join(tmpdir(), "seeds-smoke-"));
 		try {

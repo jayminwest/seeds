@@ -54,6 +54,24 @@ export async function outputJson(data: unknown): Promise<void> {
 	await writeStdout(`${JSON.stringify(data, null, 2)}\n`);
 }
 
+// Non-throwing command failure (seeds-cb18). In --json mode the failure is a
+// {success:false, command, error, ...extra} envelope on stdout so agents parsing
+// stdout never see an empty stream; otherwise `human` goes to stderr verbatim.
+export async function outputFailure(
+	jsonMode: boolean,
+	command: string,
+	error: string,
+	human: string,
+	extra: Record<string, unknown> = {},
+): Promise<void> {
+	if (jsonMode) {
+		await outputJson({ success: false, command, error, ...extra });
+	} else {
+		process.stderr.write(human);
+	}
+	process.exitCode = 1;
+}
+
 export function printSuccess(msg: string): void {
 	if (_quiet) return;
 	console.log(`${brand("✓")} ${brand(msg)}`);

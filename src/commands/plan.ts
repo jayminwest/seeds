@@ -2,9 +2,10 @@ import { dirname } from "node:path";
 import { Command } from "commander";
 import { findSeedsDir, loadPlanTemplates, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
-import { accent, brand, muted, outputJson, printSuccess } from "../output.ts";
+import { accent, brand, muted, outputFailure, outputJson, printSuccess } from "../output.ts";
 import { applyPlanBackref, buildPlanBackref, stripPlanBackref } from "../plan-backref.ts";
 import { inferDomain } from "../plan-domain.ts";
+import { reportInvalidPlan, reportPlanExists } from "../plan-failures.ts";
 import { enrichPriorArt, recordDecision } from "../plan-mulch.ts";
 import { compilePlanTemplate, defaultTemplateForType } from "../plan-schema.ts";
 import {
@@ -579,16 +580,14 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 	if (!result.valid) {
 		// Partial-state diff JSON to stderr (PLAN_SPEC.md:180-195).
 		// stdout stays clean so callers can pipe it into a file.
-		process.stderr.write(`${JSON.stringify(result.diff, null, 2)}\n`);
-		process.exitCode = 1;
+		await reportInvalidPlan(jsonMode, "plan submit", result.diff);
 		return;
 	}
 
 	const submitted = parsed as SubmittedPlan;
 	const refError = validatePlanTemplateRefs(submitted.sections.steps, templates);
 	if (refError) {
-		process.stderr.write(`${refError}\n`);
-		process.exitCode = 1;
+		await outputFailure(jsonMode, "plan submit", refError, `${refError}\n`);
 		return;
 	}
 	const config = await readConfig(dir);
@@ -629,10 +628,8 @@ async function runSubmit(seedId: string, planFile: string, opts: SubmitOptions):
 			if (existingPlan && !overwrite) {
 				// PLAN_SPEC.md:374-391 — reject without --overwrite, exit non-zero
 				// with a multi-line stderr message.
-				process.stderr.write(
-					`✗ plan ${existingPlan.id} already exists for ${seedId} (status: ${existingPlan.status}, revision: ${existingPlan.revision})\n  Use --overwrite to replace it.\n`,
-				);
-				process.exitCode = 1;
+				const hint = "Use --overwrite to replace it.";
+				await reportPlanExists(jsonMode, "plan submit", existingPlan, hint);
 				aborted = true;
 				return;
 			}
@@ -1514,10 +1511,8 @@ async function runCreate(seedId: string, opts: CreateOptions): Promise<void> {
 
 			const existingPlan = allPlans.find((p) => p.seed === seedId && p.status !== "draft");
 			if (existingPlan) {
-				process.stderr.write(
-					`✗ plan ${existingPlan.id} already exists for ${seedId} (status: ${existingPlan.status}, revision: ${existingPlan.revision})\n  Adopt seeds into it with 'sd plan adopt ${existingPlan.id} <seed-ids...>'.\n`,
-				);
-				process.exitCode = 1;
+				const hint = `Adopt seeds into it with 'sd plan adopt ${existingPlan.id} <seed-ids...>'.`;
+				await reportPlanExists(opts.jsonMode, "plan create", existingPlan, hint);
 				aborted = true;
 				return;
 			}
@@ -2490,8 +2485,10 @@ async function runValidate(idArg: string, jsonMode: boolean): Promise<void> {
 		return;
 	}
 
-	process.stderr.write(`${JSON.stringify(result.diff, null, 2)}\n`);
-	process.exitCode = 1;
+	await reportInvalidPlan(jsonMode, "plan validate", result.diff, {
+		valid: false,
+		plan_id: planId,
+	});
 }
 
 interface OutboundDecisionArgs {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import chalk from "chalk";
 import { Command, Help } from "commander";
-import { handleTopLevelError } from "./error-handler.ts";
+import { handleTopLevelError, routeCommanderErrors } from "./error-handler.ts";
 import { brand, muted, outputJson, setQuiet } from "./output.ts";
 import { registerAll } from "./register-all.ts";
 import { suggestForUnknown } from "./suggestions.ts";
@@ -105,6 +105,7 @@ async function main(): Promise<void> {
 	}
 
 	await registerAll(program);
+	if (jsonMode) routeCommanderErrors(program);
 
 	// Check for unknown commands before parsing
 	const firstArg = process.argv[2];

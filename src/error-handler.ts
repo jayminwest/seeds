@@ -6,6 +6,7 @@
 // devDependencies and may be absent from end-user installs.
 
 import chalk from "chalk";
+import { type Command, CommanderError } from "commander";
 import { writeStdout } from "./output.ts";
 
 type LoggerLoader = () => Promise<{ log: { debug: (obj: unknown, msg?: string) => void } }>;
@@ -19,6 +20,21 @@ export interface HandleTopLevelErrorOptions {
 }
 
 /**
+ * Route commander-level failures (missing required option, unknown option,
+ * excess arguments, ...) through handleTopLevelError when --json is set
+ * (seeds-cb18). exitOverride() makes commander throw a CommanderError instead
+ * of calling process.exit, and the no-op outputError suppresses its plain-text
+ * "error: ..." stderr line so the JSON envelope is the only failure output.
+ * Neither setting is inherited by already-registered subcommands (mx-8e81ac),
+ * so walk the whole tree.
+ */
+export function routeCommanderErrors(cmd: Command): void {
+	cmd.exitOverride();
+	cmd.configureOutput({ outputError: () => {} });
+	for (const child of cmd.commands) routeCommanderErrors(child);
+}
+
+/**
  * Handle a top-level error from the CLI's main() promise chain.
  *
  * The logger import is wrapped in a try/catch: if `./log.ts` (or its pino
@@ -29,7 +45,12 @@ export async function handleTopLevelError(
 	err: unknown,
 	opts: HandleTopLevelErrorOptions,
 ): Promise<void> {
-	const msg = err instanceof Error ? err.message : String(err);
+	if (err instanceof CommanderError && err.exitCode === 0) {
+		// --help / --version under exitOverride: output already written.
+		process.exitCode = 0;
+		return;
+	}
+	const msg = errorMessage(err, opts.cmd);
 	const loadLogger: LoggerLoader = opts.loadLogger ?? (() => import("./log.ts"));
 	try {
 		const { log } = await loadLogger();
@@ -54,4 +75,18 @@ export async function handleTopLevelError(
 		}
 	}
 	process.exitCode = 1;
+}
+
+function errorMessage(err: unknown, cmd: string | undefined): string {
+	if (err instanceof CommanderError) {
+		// Help shown (on stderr) because a command was invoked without a subcommand.
+		if (err.code === "commander.help") {
+			const named = cmd !== undefined && !cmd.startsWith("-");
+			return named
+				? `missing subcommand. Run 'sd ${cmd} --help' for usage.`
+				: "missing command. Run 'sd --help' for usage.";
+		}
+		return err.message.replace(/^error: /, "");
+	}
+	return err instanceof Error ? err.message : String(err);
 }
