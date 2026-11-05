@@ -60,8 +60,10 @@ export async function run(args: string[]): Promise<void> {
 	writeFileSync(join(seedsDir, TEMPLATES_FILE), "");
 	writeFileSync(join(seedsDir, PLANS_FILE), "");
 
-	// .gitignore inside .seeds/
-	writeFileSync(join(seedsDir, ".gitignore"), "*.lock\n");
+	// .gitignore inside .seeds/: lock files plus crash leftovers from store.ts
+	// (atomic-write temp files and stale-lock sidecars), so `sd sync` never
+	// commits them.
+	writeFileSync(join(seedsDir, ".gitignore"), "*.lock\n*.tmp.*\n*.lock.stale.*\n");
 
 	ensureGitattributes(cwd);
 

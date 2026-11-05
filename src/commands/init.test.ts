@@ -55,6 +55,20 @@ describe("sd init", () => {
 		expect(gitignore).toContain("*.lock");
 	});
 
+	test(".gitignore covers crash leftovers (tmp files, stale-lock sidecars)", async () => {
+		Bun.spawnSync(["git", "init", "-q"], { cwd: tmpDir });
+		await run(["init"], tmpDir);
+		const leftovers = [
+			".seeds/issues.jsonl.lock",
+			".seeds/issues.jsonl.tmp.0a1b2c3d",
+			".seeds/plans.jsonl.lock.stale.0011223344556677",
+		];
+		const res = Bun.spawnSync(["git", "check-ignore", ...leftovers], { cwd: tmpDir });
+		expect(res.stdout.toString().trim().split("\n")).toEqual(leftovers);
+		const data = Bun.spawnSync(["git", "check-ignore", ".seeds/issues.jsonl"], { cwd: tmpDir });
+		expect(data.exitCode).toBe(1);
+	});
+
 	test("appends gitattributes to project root", async () => {
 		await run(["init"], tmpDir);
 		const gitattributes = await Bun.file(join(tmpDir, ".gitattributes")).text();
