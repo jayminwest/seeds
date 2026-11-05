@@ -114,18 +114,34 @@ export async function withLock<T>(dataFilePath: string, fn: () => Promise<T>): P
 	}
 }
 
-function parseJsonl<T>(content: string): T[] {
+// Malformed-line count from the most recent read of each JSONL file. Every
+// rewrite path reads under the same lock first, so a rewrite can tell it is
+// about to drop rows it could not parse and refuse instead of deleting them.
+const malformedOnLastRead = new Map<string, number>();
+
+function parseJsonl<T>(content: string, filePath: string): T[] {
 	const results: T[] = [];
+	let malformed = 0;
 	for (const line of content.split("\n")) {
 		const trimmed = line.trim();
 		if (!trimmed) continue;
 		try {
 			results.push(JSON.parse(trimmed) as T);
 		} catch {
-			// skip malformed lines
+			malformed++; // skipped on read; guarded on rewrite
 		}
 	}
+	malformedOnLastRead.set(filePath, malformed);
 	return results;
+}
+
+function assertNoMalformedLoss(filePath: string): void {
+	const n = malformedOnLastRead.get(filePath) ?? 0;
+	if (n === 0) return;
+	throw new Error(
+		`Refusing to rewrite ${filePath}: ${String(n)} malformed line(s) would be lost. ` +
+			"Run 'sd doctor' to inspect them, then repair by hand or drop them with 'sd doctor --fix'.",
+	);
 }
 
 function deduplicateById<T extends { id: string }>(items: T[]): T[] {
@@ -137,14 +153,19 @@ function deduplicateById<T extends { id: string }>(items: T[]): T[] {
 }
 
 export async function readIssues(seedsDir: string): Promise<Issue[]> {
-	const file = Bun.file(join(seedsDir, ISSUES_FILE));
-	if (!(await file.exists())) return [];
+	const filePath = join(seedsDir, ISSUES_FILE);
+	const file = Bun.file(filePath);
+	if (!(await file.exists())) {
+		malformedOnLastRead.delete(filePath);
+		return [];
+	}
 	const content = await file.text();
-	return deduplicateById(parseJsonl<Issue>(content));
+	return deduplicateById(parseJsonl<Issue>(content, filePath));
 }
 
 export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<void> {
 	const filePath = join(seedsDir, ISSUES_FILE);
+	assertNoMalformedLoss(filePath);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const content = issues.length === 0 ? "" : `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);
@@ -170,14 +191,19 @@ export async function appendIssue(seedsDir: string, issue: Issue): Promise<void>
 }
 
 export async function readTemplates(seedsDir: string): Promise<Template[]> {
-	const file = Bun.file(join(seedsDir, TEMPLATES_FILE));
-	if (!(await file.exists())) return [];
+	const filePath = join(seedsDir, TEMPLATES_FILE);
+	const file = Bun.file(filePath);
+	if (!(await file.exists())) {
+		malformedOnLastRead.delete(filePath);
+		return [];
+	}
 	const content = await file.text();
-	return deduplicateById(parseJsonl<Template>(content));
+	return deduplicateById(parseJsonl<Template>(content, filePath));
 }
 
 export async function writeTemplates(seedsDir: string, templates: Template[]): Promise<void> {
 	const filePath = join(seedsDir, TEMPLATES_FILE);
+	assertNoMalformedLoss(filePath);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const content =
 		templates.length === 0 ? "" : `${templates.map((t) => JSON.stringify(t)).join("\n")}\n`;
@@ -215,14 +241,19 @@ export function plansPath(seedsDir: string): string {
 }
 
 export async function readPlans(seedsDir: string): Promise<Plan[]> {
-	const file = Bun.file(join(seedsDir, PLANS_FILE));
-	if (!(await file.exists())) return [];
+	const filePath = join(seedsDir, PLANS_FILE);
+	const file = Bun.file(filePath);
+	if (!(await file.exists())) {
+		malformedOnLastRead.delete(filePath);
+		return [];
+	}
 	const content = await file.text();
-	return deduplicateById(parseJsonl<Plan>(content));
+	return deduplicateById(parseJsonl<Plan>(content, filePath));
 }
 
 export async function writePlans(seedsDir: string, plans: Plan[]): Promise<void> {
 	const filePath = join(seedsDir, PLANS_FILE);
+	assertNoMalformedLoss(filePath);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const content = plans.length === 0 ? "" : `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);

@@ -196,6 +196,16 @@ describe("appendTemplate", () => {
 });
 
 describe("writeIssues", () => {
+	test("refuses to rewrite a file whose last read skipped malformed lines", async () => {
+		const good = makeIssue({ id: "test-a1b2", title: "Good" });
+		const file = join(seedsDir, "issues.jsonl");
+		await Bun.write(file, `${JSON.stringify(good)}\n{"id":"test-torn","title":"Tor\n`);
+		const issues = await readIssues(seedsDir);
+		expect(issues).toHaveLength(1);
+		await expect(writeIssues(seedsDir, issues)).rejects.toThrow(/malformed/);
+		expect(await Bun.file(file).text()).toContain("test-torn");
+	});
+
 	test("writes issues atomically (overwrites file)", async () => {
 		const original = makeIssue({ id: "test-a1b2", title: "Original" });
 		await appendIssue(seedsDir, original);
