@@ -70,6 +70,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				const idx = issues.findIndex((i) => i.id === id);
 				const issue = issues[idx];
 				if (!issue) throw new Error(`Issue not found: ${id}`);
+				if (issue.status === "closed") {
+					// Idempotent: re-closing must not rewrite closedAt/updatedAt (warren's
+					// close-child-seed treats an unchanged issues.jsonl as a noop).
+					closed.push(id);
+					continue;
+				}
 				const updated: Issue = {
 					...issue,
 					status: "closed",
