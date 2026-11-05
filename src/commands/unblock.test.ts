@@ -165,13 +165,13 @@ describe("sd unblock --all", () => {
 	});
 
 	test("removes only closed blockers", async () => {
-		// close already removed id1 from id3's blockedBy, so --all finds nothing new
+		// close keeps the edge (resolution is derived at read time), so --all prunes it
 		const result = await runJson<{ success: boolean; removed: string[] }>(
 			["unblock", id3, "--all"],
 			tmpDir,
 		);
 		expect(result.success).toBe(true);
-		expect(result.removed).not.toContain(id1);
+		expect(result.removed).toContain(id1);
 		expect(result.removed).not.toContain(id2);
 	});
 

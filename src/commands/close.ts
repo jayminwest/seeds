@@ -83,22 +83,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 					updatedAt: now,
 					...(reason ? { closeReason: reason } : {}),
 				};
+				// Touch only the closed row. Dependents keep their blockedBy edge;
+				// ready/blocked/list derive resolution from closed ids at read time, so
+				// stripping it here would only rewrite sibling rows (cross-branch JSONL
+				// conflicts), desync blocks/blockedBy for doctor, and lose the dep on reopen.
 				issues[idx] = updated;
 				closed.push(id);
-
-				// Clean up blockedBy on issues this one blocks
-				const blockedIssueIds = issue.blocks ?? [];
-				for (const blockedId of blockedIssueIds) {
-					const blockedIdx = issues.findIndex((i) => i.id === blockedId);
-					const blockedIssue = issues[blockedIdx];
-					if (!blockedIssue) continue;
-					const remaining = (blockedIssue.blockedBy ?? []).filter((bid) => bid !== id);
-					issues[blockedIdx] = {
-						...blockedIssue,
-						blockedBy: remaining.length > 0 ? remaining : undefined,
-						updatedAt: now,
-					};
-				}
 			}
 			await writeIssues(dir, issues);
 

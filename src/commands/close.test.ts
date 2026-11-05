@@ -30,7 +30,7 @@ afterEach(async () => {
 });
 
 describe("sd close", () => {
-	test("closes an issue and records --reason, removes blockedBy on dependents", async () => {
+	test("closes an issue and records --reason; dependents keep blockedBy but become ready", async () => {
 		const a = await createSeed("A", tmpDir);
 		const b = await createSeed("B", tmpDir);
 		const dep = await run(["dep", "add", b, a], tmpDir);
@@ -54,7 +54,53 @@ describe("sd close", () => {
 		expect(aShow.issue.closedAt).toBeTruthy();
 
 		const bShow = await runJson<{ issue: { blockedBy?: string[] } }>(["show", b], tmpDir);
-		expect(bShow.issue.blockedBy).toBeUndefined();
+		expect(bShow.issue.blockedBy).toEqual([a]);
+		const ready = await runJson<{ issues: Array<{ id: string }> }>(["ready"], tmpDir);
+		expect(ready.issues.map((i) => i.id)).toContain(b);
+	});
+
+	test("rewrites only the closed row; dependent rows stay byte-identical", async () => {
+		const a = await createSeed("A", tmpDir);
+		const b = await createSeed("B", tmpDir);
+		const c = await createSeed("C", tmpDir);
+		await run(["dep", "add", b, a], tmpDir);
+		await run(["dep", "add", c, a], tmpDir);
+		const file = join(tmpDir, ".seeds", "issues.jsonl");
+		const rowsOf = async () => (await Bun.file(file).text()).split("\n").filter(Boolean);
+		const before = await rowsOf();
+		await Bun.sleep(5);
+		await run(["close", a], tmpDir);
+		const after = await rowsOf();
+		expect(after).toHaveLength(before.length);
+		const changed = after.filter((row, i) => row !== before[i]);
+		expect(changed).toHaveLength(1);
+		expect((JSON.parse(changed[0] ?? "{}") as { id: string }).id).toBe(a);
+	});
+
+	test("close keeps blocks/blockedBy consistent for doctor", async () => {
+		const a = await createSeed("A", tmpDir);
+		const b = await createSeed("B", tmpDir);
+		await run(["dep", "add", b, a], tmpDir);
+		await run(["close", a], tmpDir);
+		const doc = await runJson<{ checks: Array<{ name: string; status: string }> }>(
+			["doctor"],
+			tmpDir,
+		);
+		const check = doc.checks.find((ch) => ch.name === "bidirectional-consistency");
+		expect(check?.status).toBe("pass");
+	});
+
+	test("reopening a closed blocker re-blocks its dependents", async () => {
+		const a = await createSeed("A", tmpDir);
+		const b = await createSeed("B", tmpDir);
+		await run(["dep", "add", b, a], tmpDir);
+		await run(["close", a], tmpDir);
+		const reopen = await run(["update", a, "--status", "open"], tmpDir);
+		expect(reopen.exitCode).toBe(0);
+		const ready = await runJson<{ issues: Array<{ id: string }> }>(["ready"], tmpDir);
+		expect(ready.issues.map((i) => i.id)).not.toContain(b);
+		const blocked = await runJson<{ issues: Array<{ id: string }> }>(["blocked"], tmpDir);
+		expect(blocked.issues.map((i) => i.id)).toContain(b);
 	});
 
 	test("re-closing an already-closed issue leaves issues.jsonl byte-identical", async () => {
