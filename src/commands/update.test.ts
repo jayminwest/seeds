@@ -186,6 +186,22 @@ describe("sd update --status reopen", () => {
 		expect(after.issue.closeReason).toBe("first close");
 	});
 
+	test("--status closed on an open issue stamps closedAt (doctor stays clean)", async () => {
+		const id = await create("close-via-update", tmpDir);
+		await run(["update", id, "--status", "closed"], tmpDir);
+
+		const after = await runJson<ShowResult>(["show", id], tmpDir);
+		expect(after.issue.status).toBe("closed");
+		expect(after.issue.closedAt).toBeDefined();
+
+		const doctor = await runJson<{ checks: { name: string; status: string }[] }>(
+			["doctor"],
+			tmpDir,
+		);
+		const closedCheck = doctor.checks.find((c) => c.name === "closed-fields-consistency");
+		expect(closedCheck?.status).toBe("pass");
+	});
+
 	test("rejects empty --title", async () => {
 		const id = await create("keep-title", tmpDir);
 		const { exitCode, stderr } = await run(["update", id, "--title", ""], tmpDir);

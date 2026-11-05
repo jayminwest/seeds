@@ -126,6 +126,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (patch.status !== "closed") {
 				patch.closedAt = undefined;
 				patch.closeReason = undefined;
+			} else if (!issue.closedAt) {
+				// Closing via update must stamp closedAt like `sd close` does, or doctor's
+				// closed-fields-consistency check flags the row.
+				patch.closedAt = now;
 			}
 		}
 		if (typeof flags.title === "string") {
