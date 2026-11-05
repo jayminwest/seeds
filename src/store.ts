@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { assertValidIssues, validateIssue } from "./issue-schema.ts";
 import type { Issue, Plan, Template } from "./types.ts";
 import {
 	ISSUES_FILE,
@@ -239,6 +240,31 @@ function assertNoMalformedLoss(filePath: string): void {
 	);
 }
 
+// Rows of issues.jsonl that parse but fail validateIssue, from the most recent
+// read. They are quarantined: hidden from callers (so list/show/stats never see
+// a 'Phigh' or id-less issue) yet written back on every rewrite, so a bad row
+// is never silently deleted. `sd doctor` names them for repair by hand.
+const quarantinedOnLastRead = new Map<string, unknown[]>();
+const warnedQuarantine = new Set<string>();
+
+function quarantineInvalid(rows: unknown[], filePath: string): Issue[] {
+	const valid: Issue[] = [];
+	const quarantined: unknown[] = [];
+	for (const row of rows) {
+		if (validateIssue(row).length === 0) valid.push(row as Issue);
+		else quarantined.push(row);
+	}
+	quarantinedOnLastRead.set(filePath, quarantined);
+	if (quarantined.length > 0 && !warnedQuarantine.has(filePath)) {
+		warnedQuarantine.add(filePath); // once per process, not once per read
+		process.stderr.write(
+			`warning: ${String(quarantined.length)} invalid issue row(s) in ${filePath} ` +
+				"are hidden from sd; run 'sd doctor' for details\n",
+		);
+	}
+	return valid;
+}
+
 function deduplicateById<T extends { id: string }>(items: T[]): T[] {
 	const map = new Map<string, T>();
 	for (const item of items) {
@@ -252,17 +278,21 @@ export async function readIssues(seedsDir: string): Promise<Issue[]> {
 	const file = Bun.file(filePath);
 	if (!(await file.exists())) {
 		malformedOnLastRead.delete(filePath);
+		quarantinedOnLastRead.delete(filePath);
 		return [];
 	}
 	const content = await file.text();
-	return deduplicateById(parseJsonl<Issue>(content, filePath));
+	// Validate before dedup so a quarantined row never shadows a valid one.
+	return deduplicateById(quarantineInvalid(parseJsonl<unknown>(content, filePath), filePath));
 }
 
 export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<void> {
 	const filePath = join(seedsDir, ISSUES_FILE);
 	assertNoMalformedLoss(filePath);
+	assertValidIssues(issues);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const content = issues.length === 0 ? "" : `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
+	const rows = [...issues, ...(quarantinedOnLastRead.get(filePath) ?? [])];
+	const content = rows.length === 0 ? "" : `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`;
 	await Bun.write(tmpPath, content);
 	renameSync(tmpPath, filePath);
 }
@@ -276,6 +306,7 @@ export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<vo
  * processes on its own).
  */
 export async function appendIssue(seedsDir: string, issue: Issue): Promise<void> {
+	assertValidIssues([issue]);
 	const filePath = join(seedsDir, ISSUES_FILE);
 	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
 	const file = Bun.file(filePath);

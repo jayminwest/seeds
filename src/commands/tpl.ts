@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
+import { validateIssue } from "../issue-schema.ts";
 import { accent, muted, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import {
@@ -160,7 +161,7 @@ async function runTplPour(
 
 		// Create all issues first (collect IDs)
 		const newIssues: Issue[] = [];
-		for (const step of tpl.steps) {
+		for (const [stepIdx, step] of tpl.steps.entries()) {
 			const id = generateId(
 				config.project,
 				new Set([...existingIds, ...newIssues.map((i) => i.id)]),
@@ -176,6 +177,13 @@ async function runTplPour(
 				updatedAt: now,
 				convoy: templateId,
 			};
+			// templates.jsonl is hand-editable; never pour a step seeds cannot store
+			const problems = validateIssue(issue);
+			if (problems.length > 0) {
+				throw new Error(
+					`Template ${templateId} step ${String(stepIdx + 1)} is invalid: ${problems.join(", ")}`,
+				);
+			}
 			newIssues.push(issue);
 			createdIds.push(id);
 		}

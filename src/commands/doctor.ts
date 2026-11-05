@@ -13,11 +13,12 @@ import {
 	serializeLines,
 } from "../doctor-store.ts";
 import { dedupKey, findIdCollisions } from "../id-collisions.ts";
+import { rowLabel, validateIssue } from "../issue-schema.ts";
 import { ensureMergeStrategy, inspectMergeStrategy } from "../merge-strategy.ts";
 import { brand, muted, outputJson } from "../output.ts";
 import { readIssues, readPlans } from "../store.ts";
 import type { Issue, Plan } from "../types.ts";
-import { ISSUES_FILE, VALID_STATUSES, VALID_TYPES } from "../types.ts";
+import { ISSUES_FILE } from "../types.ts";
 
 interface DoctorCheck {
 	name: string;
@@ -96,36 +97,9 @@ function checkSchemaValidation(seedsDir: string): DoctorCheck {
 	const details: string[] = [];
 	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
 	for (const line of lines) {
-		if (!line.parsed) continue;
-		const issue = line.parsed as Record<string, unknown>;
-		const id = typeof issue.id === "string" ? issue.id : `line ${String(line.lineNumber)}`;
-		if (!issue.id || typeof issue.id !== "string") {
-			details.push(`${id}: missing or invalid 'id'`);
-		}
-		if (!issue.title || typeof issue.title !== "string") {
-			details.push(`${id}: missing or invalid 'title'`);
-		}
-		if (!issue.createdAt || typeof issue.createdAt !== "string") {
-			details.push(`${id}: missing or invalid 'createdAt'`);
-		}
-		if (!issue.updatedAt || typeof issue.updatedAt !== "string") {
-			details.push(`${id}: missing or invalid 'updatedAt'`);
-		}
-		if (
-			typeof issue.status === "string" &&
-			!(VALID_STATUSES as readonly string[]).includes(issue.status)
-		) {
-			details.push(`${id}: invalid status '${issue.status}'`);
-		}
-		if (
-			typeof issue.type === "string" &&
-			!(VALID_TYPES as readonly string[]).includes(issue.type)
-		) {
-			details.push(`${id}: invalid type '${issue.type}'`);
-		}
-		if (typeof issue.priority === "number" && (issue.priority < 0 || issue.priority > 4)) {
-			details.push(`${id}: invalid priority ${String(issue.priority)} (must be 0-4)`);
-		}
+		if (line.error !== undefined) continue; // jsonl-integrity reports these
+		const id = rowLabel(line.parsed, `line ${String(line.lineNumber)}`);
+		for (const problem of validateIssue(line.parsed)) details.push(`${id}: ${problem}`);
 	}
 	if (details.length > 0) {
 		return {

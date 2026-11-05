@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir } from "../config.ts";
+import { validateIssue } from "../issue-schema.ts";
 import { outputJson } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -64,7 +65,8 @@ function mapBeadsIssue(b: BeadsIssue): Issue | null {
 	if (b.blocks?.length) issue.blocks = b.blocks;
 	const closedAt = b.closed_at ?? b.closedAt;
 	if (closedAt) issue.closedAt = closedAt;
-	return issue;
+	// Beads priority/timestamps are copied as-is; skip rows seeds cannot store.
+	return validateIssue(issue).length === 0 ? issue : null;
 }
 
 export async function run(args: string[], seedsDir?: string): Promise<void> {
