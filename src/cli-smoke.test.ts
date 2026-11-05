@@ -162,7 +162,7 @@ describe("sd CLI smoke", () => {
 				id: string;
 			};
 			expect(createdJson.success).toBe(true);
-			expect(createdJson.id).toMatch(/-[0-9a-f]{4}$/);
+			expect(createdJson.id).toMatch(/-[0-9a-f]{6}$/);
 
 			const listed = await run(["list", "--json"], cwd);
 			expect(listed.exitCode).toBe(0);

@@ -232,9 +232,9 @@ describe("ids mode is pipe-friendly", () => {
 		const ids = stdout.split("\n").filter((l) => l.length > 0);
 		expect(ids.length).toBe(2);
 		expect(new Set(ids)).toEqual(new Set([a, b]));
-		// All lines are syntactically valid IDs (project-4hex).
+		// All lines are syntactically valid IDs (project-6hex).
 		for (const id of ids) {
-			expect(id).toMatch(/-[0-9a-f]{4}$/);
+			expect(id).toMatch(/-[0-9a-f]{6}$/);
 		}
 	});
 });

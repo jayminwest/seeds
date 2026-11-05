@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { generateId } from "./id";
 
 describe("generateId", () => {
-	test("returns id matching project-{4hex} pattern", () => {
+	test("returns id matching project-{6hex} pattern", () => {
 		const id = generateId("myproject", []);
-		expect(id).toMatch(/^myproject-[0-9a-f]{4}$/);
+		expect(id).toMatch(/^myproject-[0-9a-f]{6}$/);
 	});
 
 	test("uses project name as prefix", () => {
@@ -17,14 +17,14 @@ describe("generateId", () => {
 		for (let i = 0; i < 20; i++) {
 			ids.add(generateId("proj", []));
 		}
-		// With 4 hex chars (65536 possibilities), 20 calls should almost certainly produce multiple unique values
+		// With 6 hex chars (16.7M possibilities), 20 calls should almost certainly produce multiple unique values
 		// This test is probabilistic but reliable in practice
 		expect(ids.size).toBeGreaterThan(1);
 	});
 
 	test("avoids collisions with existing ids", () => {
 		// Fill all possible 1-char hex suffixes to force collision avoidance
-		// In practice, with 4 hex = 65536 options, collisions are extremely rare
+		// In practice, with 6 hex = 16.7M options, collisions are extremely rare
 		const id1 = generateId("proj", []);
 		const id2 = generateId("proj", [id1]);
 		expect(id2).not.toBe(id1);
@@ -37,12 +37,12 @@ describe("generateId", () => {
 		const existing: string[] = [];
 		// This is a functional test — just ensure it completes
 		const id = generateId("p", existing);
-		expect(id).toMatch(/^p-[0-9a-f]{4,}$/);
+		expect(id).toMatch(/^p-[0-9a-f]{6,}$/);
 	});
 
 	test("handles project names with hyphens", () => {
 		const id = generateId("my-project", []);
-		expect(id).toMatch(/^my-project-[0-9a-f]{4}$/);
+		expect(id).toMatch(/^my-project-[0-9a-f]{6}$/);
 	});
 
 	test("hex suffix uses lowercase letters", () => {

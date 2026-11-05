@@ -34,7 +34,7 @@ describe("sd create", () => {
 			tmpDir,
 		);
 		expect(result.success).toBe(true);
-		expect(result.id).toMatch(/^.+-[0-9a-f]{4}$/);
+		expect(result.id).toMatch(/^.+-[0-9a-f]{6}$/);
 	});
 
 	test("requires --title flag", async () => {

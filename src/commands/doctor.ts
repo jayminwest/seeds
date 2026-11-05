@@ -3,6 +3,7 @@ import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
+import { dedupKey, findIdCollisions } from "../id-collisions.ts";
 import { brand, muted, outputJson } from "../output.ts";
 import { readIssues, readPlans } from "../store.ts";
 import type { Issue, Plan, Template } from "../types.ts";
@@ -167,8 +168,11 @@ function checkSchemaValidation(seedsDir: string): DoctorCheck {
 
 function checkDuplicateIds(seedsDir: string): DoctorCheck {
 	const details: string[] = [];
+	let collided = 0;
 	for (const file of [ISSUES_FILE, TEMPLATES_FILE]) {
 		const lines = readRawLines(join(seedsDir, file));
+		const collisions = findIdCollisions(lines.map((l) => l.parsed));
+		collided += collisions.size;
 		const counts = new Map<string, number>();
 		for (const line of lines) {
 			if (!line.parsed) continue;
@@ -178,7 +182,11 @@ function checkDuplicateIds(seedsDir: string): DoctorCheck {
 			}
 		}
 		for (const [id, count] of counts) {
-			if (count > 1) {
+			if (collisions.has(id)) {
+				details.push(
+					`${id}: ID collision in ${file}, ${String(count)} rows with different createdAt (distinct items; rename one by hand)`,
+				);
+			} else if (count > 1) {
 				details.push(`${id} appears ${String(count)} times in ${file}`);
 			}
 		}
@@ -186,8 +194,8 @@ function checkDuplicateIds(seedsDir: string): DoctorCheck {
 	if (details.length > 0) {
 		return {
 			name: "duplicate-ids",
-			status: "warn",
-			message: `${String(details.length)} duplicate ID(s) found`,
+			status: collided > 0 ? "fail" : "warn",
+			message: `${String(details.length)} duplicate ID(s) found${collided > 0 ? ` (${String(collided)} collision(s))` : ""}`,
 			details,
 			fixable: true,
 		};
@@ -591,7 +599,7 @@ function applyFixes(seedsDir: string, checks: DoctorCheck[]): string[] {
 				break;
 			}
 			case "duplicate-ids": {
-				// Read, dedup (last wins), and rewrite via store functions
+				// Dedup edits (last wins); id collisions keep every distinct item
 				fixDuplicates(seedsDir, fixed);
 				break;
 			}
@@ -737,12 +745,13 @@ function fixClosedFieldsConsistency(seedsDir: string, fixed: string[]): void {
 function fixDuplicates(seedsDir: string, fixed: string[]): void {
 	// Issues
 	const issueLines = readRawLines(join(seedsDir, ISSUES_FILE));
+	const issueCollisions = findIdCollisions(issueLines.map((l) => l.parsed));
 	const issueMap = new Map<string, Issue>();
 	for (const line of issueLines) {
 		if (!line.parsed) continue;
 		const issue = line.parsed as Issue;
 		if (typeof issue.id === "string") {
-			issueMap.set(issue.id, issue);
+			issueMap.set(dedupKey(issue, issueCollisions), issue);
 		}
 	}
 	if (issueMap.size < issueLines.filter((l) => l.parsed).length) {
@@ -755,12 +764,13 @@ function fixDuplicates(seedsDir: string, fixed: string[]): void {
 
 	// Templates
 	const tplLines = readRawLines(join(seedsDir, TEMPLATES_FILE));
+	const tplCollisions = findIdCollisions(tplLines.map((l) => l.parsed));
 	const tplMap = new Map<string, Template>();
 	for (const line of tplLines) {
 		if (!line.parsed) continue;
 		const tpl = line.parsed as Template;
 		if (typeof tpl.id === "string") {
-			tplMap.set(tpl.id, tpl);
+			tplMap.set(dedupKey(tpl, tplCollisions), tpl);
 		}
 	}
 	if (tplMap.size < tplLines.filter((l) => l.parsed).length) {

@@ -34,7 +34,7 @@ describe("sd tpl create", () => {
 			tmpDir,
 		);
 		expect(result.success).toBe(true);
-		expect(result.id).toMatch(/^tpl-[0-9a-f]{4}$/);
+		expect(result.id).toMatch(/^tpl-[0-9a-f]{6}$/);
 	});
 
 	test("requires --name", async () => {

@@ -326,7 +326,7 @@ sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a s
 
 ```typescript
 interface Issue {
-  id: string;                  // "{project}-{4hex}"
+  id: string;                  // "{project}-{6hex}" (older ids: 4hex)
   title: string;
   status: "open" | "in_progress" | "closed";
   type: "task" | "bug" | "feature" | "epic";

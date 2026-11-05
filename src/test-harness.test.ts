@@ -41,7 +41,7 @@ describe("runCli basic capture", () => {
 			["create", "--title", "harness check", "--priority", "1"],
 			tmpDir,
 		);
-		expect(created.id).toMatch(/-[0-9a-f]{4}$/);
+		expect(created.id).toMatch(/-[0-9a-f]{6}$/);
 		const listed = await runCliJson<{ issues: Array<{ id: string; title: string }> }>(
 			["list"],
 			tmpDir,
