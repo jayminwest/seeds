@@ -7,10 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05
+
 ### Added
 - Plan parents no longer linger silently: when `sd close` / `sd update --status` leaves a plan `done` while its parent seed is still open, the command prints a `sd close <parent>` hint (stderr) and `--json` adds `openPlanParents: [{plan, seed}]`. `sd prime` live state lists such parents under "Plan done, parent still open" (`state.openPlanParents` in `--json`). Closing stays explicit. (seeds-5671)
 
 ### Fixed
+- `sd guard` catches case-variant paths, symlinked `.seeds/` paths, and MCP write tools, not only `Edit`/`Write` on the literal path. Re-run `sd setup claude` to install the new hook matcher. (seeds-5b26)
+- `sd close` touches only the closed row. It no longer strips the closed id from dependents' `blockedBy`; `ready`, `blocked`, `list`, `search`, `show`, `stats` and `dep` derive blocker resolution at read time. This removes the cross-branch JSONL conflicts the sibling rewrites caused and keeps the dependency on reopen. `sd doctor --fix` repairs one-sided edges left by older versions. (seeds-9be5)
+- YAML writer quotes keys/values that start with indicator characters and the reader honors `\"` escapes; `sd config set` accepts compact JSON flow values. (seeds-6c98)
+- `sd plan submit --overwrite` re-stamps `plan_step_index` on every matched child and clears it on obsolete ones, so `sd plan edit --step` targets the right seed. New doctor check `plan-step-index`. (seeds-fb42)
+- Commander-level failures (unknown option, missing argument) and `sd plan` failure paths now emit the `--json` error envelope. (seeds-cb18)
+- `sd sync` stages `.gitattributes` when it carries `.seeds/` rules, and fails clearly outside a git repo. (seeds-7291)
+- Lock files record their owner (`{pid, host, startedAt}`); a lock whose same-host holder is dead is reclaimed at once instead of after 30s, and live holders heartbeat the lock mtime. (seeds-a34c)
+- `sd dep add`, `sd block`, `sd plan submit` and `sd plan adopt` refuse edges that would create a dependency cycle (closed issues included). (seeds-20c5)
+- `NO_COLOR` is honored. (seeds-0f8c)
+- New ids use 6 hex characters (older 4-hex ids stay valid) so ids minted on separate branches rarely collide. `sd doctor` reports duplicate ids whose `createdAt` differs as a collision, and `--fix` keeps every distinct row. (seeds-44db)
+- Option values starting with `--` and empty strings are no longer dropped: commands receive commander's parsed options directly. Empty `--assignee` / `--description` on `sd update` clear the field; empty `--priority` is rejected. (seeds-0374)
 - `--json` failure envelopes now report the full subcommand path in `command` (`"dep add"`, `"tpl step add"`), matching the success envelope, instead of only the top-level command (`"dep"`). Applies to commander-level errors and errors thrown by a command. `sd create --json` adds `issue` (the created record, as `update`/`show` return it) alongside `id`. A contract test pins every command's envelope keys. (seeds-7f39)
 - CLI papercuts (seeds-bde5): `sd update --claim` succeeds when the caller already owns the issue in_progress (crash retry); `sd label add/remove` and `sd dep add/remove` report only what changed (`--json` adds `changed`) and leave `updatedAt` alone on a no-op; `sd update <id>` with no field flags is an error instead of a timestamp bump; titles with newlines or control characters are rejected by `create`, `update` and `tpl step add` (which now also trims); typo hints count transpositions (`sd lsit` → `list`); `sd plan <unknown>` reports the unknown subcommand instead of "too many arguments"; root help scopes `--format` to the commands that honor it; `plan prompt` / `plan submit` help match actual output and required sections; the published bin prints a `bun install` hint when dependencies are missing. README `unblock --all` now says closed blockers.
 - `sd list` no longer truncates silently. `--json` and `--format ids` are uncapped by default (consumers treat them as the complete set); human formats still cap at 50 but the footer reads `50 of N issue(s) shown (use --limit 0 for all)` (compact writes it to stderr). `list --json` adds `total` (pre-limit count) and `truncated`. `--limit 0` now means "no limit" for `list`, `ready`, and `search` instead of returning zero rows. (seeds-dd20)
@@ -22,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/log.ts` and the `pino` / `pino-pretty` devDependencies. The logger was dead in production (devDependencies never ship, so the lazy import always failed). `SEEDS_DEBUG=1` now prints the top-level error's stack to stderr instead. (seeds-8f00)
 
 ### Changed
+- **Breaking for consumers:** new ids are `{project}-{6hex}`; `blockedBy` can now contain closed ids (check status, or use `sd ready`/`sd blocked`); `--json` error `command` is the full subcommand path; `sd prime --json` drops `content`, `workflows` and `contextRecovery`; `sd label` / `sd dep` report only what changed; `--limit 0` means all.
+- `sd prime` output trimmed. (seeds-0f8c)
+- Appends use `O_APPEND` instead of rewriting the file; `sd doctor` reads each store once (50k issues: 440ms → 203ms); `close`/`dep`/`plan` look issues up by id map. (seeds-b79d)
+- Test suite 22.9s → 9.8s. (seeds-056d)
 - Cold start roughly halved (`sd ready` ~55ms → ~30ms, `sd --version` ~44ms → ~22ms): the CLI imports only the invoked command's module (the full tree still loads for `--help`, unknown commands and `completions`), and worktree detection reads `.git` / `gitdir:` / `commondir` from the filesystem instead of spawning `git rev-parse` (git is still used when `GIT_DIR` / `GIT_COMMON_DIR` is set). (seeds-2ba4)
 - `knip.json` marks `src/**` as production project files so `knip --production` analyzes the shipped graph (previously it falsely reported `ajv` unused). (seeds-8f00)
 
@@ -453,7 +470,8 @@ Nightwatch patrol fixes (plan pl-09b0): a batch of small correctness and consist
 - Zero runtime dependencies — Bun built-ins only
 - `merge=union` gitattribute for git-native parallel branch merges
 
-[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jayminwest/seeds/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/jayminwest/seeds/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jayminwest/seeds/compare/v0.5.15...v0.6.0
 [0.5.1]: https://github.com/jayminwest/seeds/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jayminwest/seeds/compare/v0.4.7...v0.5.0
