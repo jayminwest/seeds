@@ -21,7 +21,7 @@ export function parseYaml(content: string): Record<string, YamlValue> {
 	if (lines.length === 0) return {};
 	const top = lines[0];
 	if (!top) return {};
-	if (top.text.startsWith("-")) {
+	if (isSeqItem(top.text)) {
 		throw new Error("Top-level YAML sequences are not supported by this parser");
 	}
 	const { value } = parseMapping(lines, 0, top.indent);
@@ -31,6 +31,12 @@ export function parseYaml(content: string): Record<string, YamlValue> {
 
 export function stringifyYaml(data: Record<string, YamlValue>): string {
 	return emitMap(data, 0);
+}
+
+// A sequence item is `-` alone or `- ...`. A bare `-foo` is a plain scalar
+// (e.g. the mapping key in `-foo: x`), not a sequence item.
+function isSeqItem(text: string): boolean {
+	return text === "-" || text.startsWith("- ");
 }
 
 interface TokLine {
@@ -61,7 +67,9 @@ function stripComment(line: string): string {
 	let inDouble = false;
 	for (let i = 0; i < line.length; i++) {
 		const c = line[i];
-		if (!inDouble && c === "'") inSingle = !inSingle;
+		if (inDouble && c === "\\")
+			i++; // skip the escaped char (e.g. \")
+		else if (!inDouble && c === "'") inSingle = !inSingle;
 		else if (!inSingle && c === '"') inDouble = !inDouble;
 		else if (!inSingle && !inDouble && c === "#") {
 			// Treat `#` as a comment only if preceded by whitespace or at line start.
@@ -78,7 +86,7 @@ function parseBlock(
 ): { value: YamlValue; end: number } {
 	const first = lines[start];
 	if (!first || first.indent < indent) return { value: null, end: start };
-	if (first.text.startsWith("- ") || first.text === "-") {
+	if (isSeqItem(first.text)) {
 		return parseSequence(lines, start, first.indent);
 	}
 	return parseMapping(lines, start, first.indent);
@@ -95,7 +103,7 @@ function parseMapping(
 		const line = lines[i];
 		if (!line || line.indent < indent) break;
 		if (line.indent > indent) break;
-		if (line.text.startsWith("-")) break;
+		if (isSeqItem(line.text)) break;
 		const entry = parseMapEntry(lines, i, indent);
 		obj[entry.key] = entry.value;
 		i = entry.end;
@@ -123,7 +131,7 @@ function parseMapEntry(
 		// A sibling mapping key at the same indent is NOT this key's value; only
 		// a same-indent sequence (`- ...`) is, since YAML allows sequences to
 		// share their parent's indent.
-		if (next.indent === indent && !next.text.startsWith("-")) {
+		if (next.indent === indent && !isSeqItem(next.text)) {
 			return { key, value: null, end: idx + 1 };
 		}
 		const sub = parseBlock(lines, idx + 1, next.indent);
@@ -141,7 +149,7 @@ function parseSequence(
 	let i = start;
 	while (i < lines.length) {
 		const line = lines[i];
-		if (!line || line.indent !== indent || !line.text.startsWith("-")) break;
+		if (!line || line.indent !== indent || !isSeqItem(line.text)) break;
 		const rest = line.text === "-" ? "" : line.text.slice(2).trimStart();
 		if (rest === "") {
 			const next = lines[i + 1];
@@ -156,9 +164,10 @@ function parseSequence(
 			continue;
 		}
 		const inlineColon = findKeyColon(rest);
+		// findKeyColon skips colons inside quotes, so `- "a: b"` stays a scalar
+		// while `- "-": x` (quoted key) is still a mapping item.
 		const startsWithFlow = rest.startsWith("{") || rest.startsWith("[");
-		const startsWithQuote = rest.startsWith('"') || rest.startsWith("'");
-		if (inlineColon !== -1 && !startsWithFlow && !startsWithQuote) {
+		if (inlineColon !== -1 && !startsWithFlow) {
 			// "- key: value" — start of a block-mapping item. The map's logical
 			// indent is the column where `key` begins (line indent + 2 for "- ").
 			const itemIndent = indent + 2;
@@ -181,7 +190,7 @@ function parseSequence(
 			}
 			while (i < lines.length) {
 				const more = lines[i];
-				if (!more || more.indent !== itemIndent || more.text.startsWith("-")) break;
+				if (!more || more.indent !== itemIndent || isSeqItem(more.text)) break;
 				const entry = parseMapEntry(lines, i, itemIndent);
 				obj[entry.key] = entry.value;
 				i = entry.end;
@@ -201,7 +210,8 @@ function findKeyColon(text: string): number {
 	let depth = 0;
 	for (let i = 0; i < text.length; i++) {
 		const c = text[i];
-		if (!inDouble && c === "'") inSingle = !inSingle;
+		if (inDouble && c === "\\") i++;
+		else if (!inDouble && c === "'") inSingle = !inSingle;
 		else if (!inSingle && c === '"') inDouble = !inDouble;
 		else if (!inSingle && !inDouble && (c === "{" || c === "[")) depth++;
 		else if (!inSingle && !inDouble && (c === "}" || c === "]")) depth--;
@@ -228,8 +238,15 @@ function unquote(s: string): string {
 }
 
 export function parseScalarOrFlow(s: string): YamlValue {
-	if (s.startsWith("[")) return parseFlowSeq(s);
-	if (s.startsWith("{")) return parseFlowMap(s);
+	if (s.startsWith("[") || s.startsWith("{")) {
+		// JSON is a subset of YAML flow style, but compact JSON (`{"a":1}`) has
+		// no space after `:`, which the YAML flow parser below requires.
+		try {
+			return JSON.parse(s) as YamlValue;
+		} catch {
+			return s.startsWith("[") ? parseFlowSeq(s) : parseFlowMap(s);
+		}
+	}
 	if (s.startsWith('"') || s.startsWith("'")) return unquote(s);
 	if (s === "true") return true;
 	if (s === "false") return false;
@@ -270,7 +287,8 @@ function splitFlow(s: string): string[] {
 	let start = 0;
 	for (let i = 0; i < s.length; i++) {
 		const c = s[i];
-		if (!inDouble && c === "'") inSingle = !inSingle;
+		if (inDouble && c === "\\") i++;
+		else if (!inDouble && c === "'") inSingle = !inSingle;
 		else if (!inSingle && c === '"') inDouble = !inDouble;
 		else if (!inSingle && !inDouble && (c === "[" || c === "{")) depth++;
 		else if (!inSingle && !inDouble && (c === "]" || c === "}")) depth--;
@@ -287,7 +305,7 @@ function emitMap(obj: Record<string, YamlValue>, indent: number): string {
 	const lines: string[] = [];
 	const pad = " ".repeat(indent);
 	for (const [k, v] of Object.entries(obj)) {
-		const key = needsQuotedKey(k) ? `"${k}"` : k;
+		const key = formatKey(k);
 		if (v === null || v === undefined) {
 			lines.push(`${pad}${key}:`);
 		} else if (typeof v === "string") {
@@ -341,7 +359,7 @@ function emitSeq(arr: YamlValue[], indent: number): string {
 			if (!first) continue;
 			const [fk, fv] = first;
 			const rest = entries.slice(1);
-			const fkKey = needsQuotedKey(fk) ? `"${fk}"` : fk;
+			const fkKey = formatKey(fk);
 			if (
 				fv !== null &&
 				typeof fv !== "object" &&
@@ -373,15 +391,24 @@ function formatScalarValue(v: YamlValue): string {
 	return String(v);
 }
 
+// Strings a standard (YAML 1.2 core, plus 1.1 booleans) parser would read as
+// a non-string, or that this parser would type: null, bool, int, float, inf/nan.
+const NON_STRING_PLAIN =
+	/^(?:~|null|Null|NULL|true|True|TRUE|false|False|FALSE|y|Y|yes|Yes|YES|n|N|no|No|NO|on|On|ON|off|Off|OFF|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)|0x[0-9a-fA-F]+|0o[0-7]+|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?)$/;
+
 function needsQuotedScalar(s: string): boolean {
 	if (s === "") return true;
-	if (s === "true" || s === "false" || s === "null" || s === "~") return true;
-	if (/^-?\d+(\.\d+)?$/.test(s)) return true;
+	if (NON_STRING_PLAIN.test(s)) return true;
+	// Leading YAML indicators (`- x` would start a sequence, `? x` a complex key).
+	if (/^[-?]/.test(s)) return true;
 	if (/[:#"'[\]{}\n,&*!|>%@`]/.test(s)) return true;
+	// Control characters (incl. tab and CR) only round-trip inside double quotes.
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
+	if (/[\x00-\x1f\x7f]/.test(s)) return true;
 	if (s !== s.trim()) return true;
 	return false;
 }
 
-function needsQuotedKey(k: string): boolean {
-	return /[\s:#"'[\]{},&*!|>%@`]/.test(k) || k === "";
+function formatKey(k: string): string {
+	return needsQuotedScalar(k) || /\s/.test(k) ? JSON.stringify(k) : k;
 }

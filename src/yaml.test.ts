@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseYaml, stringifyYaml, type YamlValue } from "./yaml";
+import { parse as parseStdYaml } from "yaml";
+import { parseScalarOrFlow, parseYaml, stringifyYaml, type YamlValue } from "./yaml";
 
 describe("parseYaml — flat (legacy)", () => {
 	test("parses simple key-value pairs", () => {
@@ -282,5 +283,55 @@ describe("stringifyYaml", () => {
 		const yaml = stringifyYaml(original);
 		const parsed = parseYaml(yaml);
 		expect(parsed).toEqual(original);
+	});
+});
+
+describe("stringifyYaml — indicator quoting (round-trips via ours and std YAML)", () => {
+	function roundTrip(original: Record<string, YamlValue>): string {
+		const yaml = stringifyYaml(original);
+		expect(parseYaml(yaml)).toEqual(original);
+		expect(parseStdYaml(yaml)).toEqual(original);
+		return yaml;
+	}
+
+	test("key '-' keeps the map and the keys after it", () => {
+		const yaml = roundTrip({ "-": "x", after: "y" });
+		expect(yaml).toContain('"-": x');
+	});
+
+	test("keys starting with '-' or '?' and keys with escapes round-trip", () => {
+		roundTrip({ "-foo": 1, "? q": 2, '"': 3, "a\\b": 4, "": 5 });
+	});
+
+	test("quoted keys as the first entry of a sequence item", () => {
+		roundTrip({ items: [{ "-": "a", b: "c" }, { '"q"': 1 }] });
+	});
+
+	test("values starting with indicators are quoted", () => {
+		const yaml = roundTrip({ a: "- dash", b: "-", c: "? q", d: "-x" });
+		expect(yaml).toContain('a: "- dash"');
+	});
+
+	test("strings std YAML would type as non-strings are quoted", () => {
+		const strs = [".inf", "-.inf", ".nan", "+1", "1e3", "0x1F", "0o7", "1.", ".5", "yes", "No"];
+		const original = Object.fromEntries(strs.map((v, i) => [`k${i}`, v]));
+		roundTrip(original);
+		roundTrip({ seq: strs });
+	});
+
+	test("control characters round-trip inside double quotes", () => {
+		roundTrip({ a: "x\ty", b: "x\ry", c: "x\ny" });
+	});
+});
+
+describe("parseScalarOrFlow — JSON input", () => {
+	test("accepts compact JSON flow maps and sequences", () => {
+		expect(parseScalarOrFlow('[{"name":"why"}]')).toEqual([{ name: "why" }]);
+		expect(parseScalarOrFlow('{"a":1,"b":[true,null]}')).toEqual({ a: 1, b: [true, null] });
+	});
+
+	test("still parses YAML flow style", () => {
+		expect(parseScalarOrFlow("{ kind: text, n: 3 }")).toEqual({ kind: "text", n: 3 });
+		expect(parseScalarOrFlow("[a, b]")).toEqual(["a", "b"]);
 	});
 });

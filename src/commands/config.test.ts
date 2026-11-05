@@ -216,6 +216,27 @@ describe("sd config set", () => {
 		expect(stderr).toContain("Config validation failed");
 	});
 
+	test("accepts compact JSON flow maps", async () => {
+		const { exitCode, stderr } = await run(
+			[
+				"config",
+				"set",
+				"plan_templates.spike.sections.context",
+				'{"required":true,"kind":"text","prompt":"Why?","min_length":30}',
+			],
+			tmpDir,
+		);
+		expect(stderr).toBe("");
+		expect(exitCode).toBe(0);
+
+		const result = await runJson<{ value: { prompt: string; min_length: number } }>(
+			["config", "show", "--path", "plan_templates.spike.sections.context"],
+			tmpDir,
+		);
+		expect(result.value.prompt).toBe("Why?");
+		expect(result.value.min_length).toBe(30);
+	});
+
 	test("persists changes to disk in YAML form", async () => {
 		await run(["config", "set", "max_plan_depth", "7"], tmpDir);
 		const onDisk = await readFile(join(tmpDir, ".seeds", "config.yaml"), "utf8");
