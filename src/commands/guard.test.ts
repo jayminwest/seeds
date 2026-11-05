@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { guardDecision, guardOutput } from "./guard.ts";
 
@@ -31,6 +33,50 @@ describe("sd guard", () => {
 	test("resolves relative paths against the fallback cwd when input has none", () => {
 		const input = { tool_name: "Edit", tool_input: { file_path: "issues.jsonl" } };
 		expect(guardDecision(input, "/repo/.seeds")).not.toBeNull();
+	});
+
+	test("folds case only where the filesystem does", () => {
+		const upper = edit("Edit", ".SEEDS/issues.JSONL");
+		expect(guardDecision(upper, CWD, true)).toContain("sd update");
+		expect(guardDecision(edit("Write", ".Seeds/plans.jsonl"), CWD, true)).toContain("sd plan");
+		expect(guardDecision(upper, CWD, false)).toBeNull();
+	});
+
+	test("resolves symlinked files and directories to the store", () => {
+		const root = mkdtempSync(join(tmpdir(), "sd-guard-"));
+		try {
+			mkdirSync(join(root, ".seeds"));
+			writeFileSync(join(root, ".seeds", "issues.jsonl"), "");
+			symlinkSync(join(root, ".seeds", "issues.jsonl"), join(root, "link.jsonl"));
+			symlinkSync(join(root, ".seeds"), join(root, "store"));
+			expect(guardDecision(edit("Write", "link.jsonl", root), CWD)).toContain("sd update");
+			expect(guardDecision(edit("Edit", "store/issues.jsonl", root), CWD)).toContain("sd update");
+			// New file under a symlinked dir: parent resolves even though the file does not exist.
+			expect(guardDecision(edit("Write", "store/new.jsonl", root), CWD)).toContain("sd CLI");
+			expect(guardDecision(edit("Write", "store/config.yaml", root), CWD)).toBeNull();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("guards MCP write tools on any path-ish key; MCP reads stay allowed", () => {
+		const mcp = (tool: string, input: Record<string, string>) => ({
+			tool_name: tool,
+			tool_input: input,
+			cwd: CWD,
+		});
+		const store = { path: ".seeds/issues.jsonl" };
+		expect(guardDecision(mcp("mcp__fs__write_file", store), CWD)).toContain("sd update");
+		expect(guardDecision(mcp("mcp__fs__edit_file", store), CWD)).not.toBeNull();
+		expect(
+			guardDecision(
+				mcp("mcp__fs__move_file", { source: "a", destination: ".seeds/plans.jsonl" }),
+				CWD,
+			),
+		).toContain("sd plan");
+		expect(guardDecision(mcp("mcp__fs__read_file", store), CWD)).toBeNull();
+		expect(guardDecision(mcp("mcp__fs__write_file", { path: "src/a.ts" }), CWD)).toBeNull();
+		expect(guardDecision(mcp("Read", { file_path: ".seeds/issues.jsonl" }), CWD)).toBeNull();
 	});
 
 	test("emits the PreToolUse deny contract; unparsable input fails open", () => {

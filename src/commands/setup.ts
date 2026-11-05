@@ -2,7 +2,7 @@
 // <project>/.claude/settings.json.
 //
 //   SessionStart  sd prime --compact   (quick reference + live issue state)
-//   PreToolUse    sd guard             (Write|Edit|MultiEdit|NotebookEdit)
+//   PreToolUse    sd guard             (Write|Edit|MultiEdit|NotebookEdit|mcp__.*)
 //
 // Claude Code nests handlers in matcher groups:
 //   {"hooks": {"<Event>": [{"matcher": "...", "hooks": [{"type": "command", "command": "..."}]}]}}
@@ -27,7 +27,11 @@ interface HookSpec {
 
 const HOOKS: readonly HookSpec[] = [
 	{ event: "SessionStart", command: "sd prime --compact" },
-	{ event: "PreToolUse", matcher: "Write|Edit|MultiEdit|NotebookEdit", command: "sd guard" },
+	{
+		event: "PreToolUse",
+		matcher: "Write|Edit|MultiEdit|NotebookEdit|mcp__.*",
+		command: "sd guard",
+	},
 ];
 
 const SD_COMMAND_RE = /^\s*sd\s+(prime|guard)(\s|$)/;

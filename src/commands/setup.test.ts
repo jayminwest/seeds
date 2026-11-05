@@ -28,7 +28,7 @@ const INSTALLED = {
 	SessionStart: [{ hooks: [{ type: "command", command: "sd prime --compact" }] }],
 	PreToolUse: [
 		{
-			matcher: "Write|Edit|MultiEdit|NotebookEdit",
+			matcher: "Write|Edit|MultiEdit|NotebookEdit|mcp__.*",
 			hooks: [{ type: "command", command: "sd guard" }],
 		},
 	],
