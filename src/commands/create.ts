@@ -5,6 +5,7 @@ import { collect, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import { appendIssue, issuesPath, readIssues, withLock } from "../store.ts";
+import { normalizeTitle } from "../title.ts";
 import type { Issue } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
 
@@ -25,8 +26,8 @@ interface CreateOptions {
 
 async function runCreate(opts: CreateOptions, seedsDir?: string): Promise<void> {
 	const jsonMode = opts.json === true;
-	const title = opts.title;
-	if (!title.trim()) throw new Error("--title is required");
+	if (!opts.title.trim()) throw new Error("--title is required");
+	const title = normalizeTitle(opts.title);
 
 	const typeVal = opts.type ?? "task";
 	if (!(VALID_TYPES as readonly string[]).includes(typeVal)) {
@@ -65,7 +66,7 @@ async function runCreate(opts: CreateOptions, seedsDir?: string): Promise<void> 
 		const now = new Date().toISOString();
 		const issue: Issue = {
 			id,
-			title: title.trim(),
+			title,
 			status: "open",
 			type: issueType,
 			priority,

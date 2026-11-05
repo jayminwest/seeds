@@ -50,6 +50,16 @@ describe("sd update --claim", () => {
 		expect((await show(id, tmpDir)).assignee).toBe("agent-a");
 	});
 
+	test("re-claim by the current owner of an in_progress issue succeeds (crash retry)", async () => {
+		const id = await create("claim-retry", tmpDir);
+		await runCli(["update", id, "--claim", "--as", "agent-a"], tmpDir);
+		const res = await runCli(["update", id, "--claim", "--as", "agent-a"], tmpDir);
+		expect(res.exitCode).toBe(0);
+		const issue = await show(id, tmpDir);
+		expect(issue.status).toBe("in_progress");
+		expect(issue.assignee).toBe("agent-a");
+	});
+
 	test("fails on a closed issue", async () => {
 		const id = await create("claim-3", tmpDir);
 		await runCli(["close", id], tmpDir);

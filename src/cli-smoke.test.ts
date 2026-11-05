@@ -90,6 +90,9 @@ describe("sd CLI smoke", () => {
 		// Spot-check root flags.
 		expect(stdout).toContain("--json");
 		expect(stdout).toContain("--timing");
+		// --format is scoped to the commands that honor it (seeds-bde5).
+		expect(stdout).toContain("list/ready/search/show/blocked/stats");
+		expect(stdout).not.toContain("Alias for --format json");
 	});
 
 	test("sd create --help hides the --label alias", async () => {

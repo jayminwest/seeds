@@ -19,6 +19,7 @@ import {
 	writeIssues,
 	writePlans,
 } from "../store.ts";
+import { normalizeTitle } from "../title.ts";
 import type { Issue } from "../types.ts";
 import { VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
@@ -89,9 +90,12 @@ export async function runUpdate(id: string, opts: UpdateOptions, seedsDir?: stri
 		const patch: Partial<Issue> = { updatedAt: now };
 
 		// Claim is checked and applied under the issues lock, so of any number
-		// of concurrent claimants exactly one sees status=open and wins.
+		// of concurrent claimants exactly one sees status=open and wins. Re-claiming
+		// an issue already in_progress under the same identity succeeds, so an agent
+		// retrying after a crash is not locked out of its own work.
 		if (claimant !== undefined) {
-			if (issue.status !== "open") {
+			const ownRetry = issue.status === "in_progress" && issue.assignee === claimant;
+			if (issue.status !== "open" && !ownRetry) {
 				const by = issue.assignee ? ` by ${issue.assignee}` : "";
 				throw new Error(`Cannot claim ${id}: status is ${issue.status}${by}`);
 			}
@@ -123,11 +127,7 @@ export async function runUpdate(id: string, opts: UpdateOptions, seedsDir?: stri
 			}
 		}
 		if (opts.title !== undefined) {
-			const trimmedTitle = opts.title.trim();
-			if (trimmedTitle === "") {
-				throw new Error("--title must not be empty");
-			}
-			patch.title = trimmedTitle;
+			patch.title = normalizeTitle(opts.title);
 		}
 		// An empty --assignee / --description clears the field rather than storing "".
 		if (opts.assignee !== undefined) patch.assignee = opts.assignee || undefined;
@@ -184,6 +184,12 @@ export async function runUpdate(id: string, opts: UpdateOptions, seedsDir?: stri
 			const base = patch.labels ?? issue.labels ?? [];
 			const remaining = base.filter((l) => !toRemove.has(l));
 			patch.labels = remaining.length > 0 ? remaining : undefined;
+		}
+
+		// updatedAt is always in the patch; nothing else means no field flag was
+		// given, which is a usage error rather than a silent timestamp bump.
+		if (Object.keys(patch).length === 1) {
+			throw new Error(`No fields to update for ${id}: pass at least one field flag`);
 		}
 
 		issues[idx] = { ...issue, ...patch };

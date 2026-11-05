@@ -42,6 +42,7 @@ canopy (prompts). See `SPEC.md` for the V1 design record.
 ```
 seeds/
 ├── src/
+│   ├── bin.ts              # published bin: loads index.ts, hints `bun install` on missing deps
 │   ├── index.ts            # sd CLI entry point + command router
 │   ├── version.ts          # VERSION constant (import without CLI side-effects)
 │   ├── types.ts            # Issue, Template, Config, shared constants

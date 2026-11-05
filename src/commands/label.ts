@@ -77,22 +77,39 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		const newLabels = normalizeLabels(rawLabels);
 		if (newLabels.length === 0) throw new Error("No valid labels provided");
 
+		// Report only labels that were actually added; a no-op leaves the row
+		// (and its updatedAt) untouched.
+		let added: string[] = [];
 		await withLock(issuesPath(dir), async () => {
 			const issues = await readIssues(dir);
 			const idx = issues.findIndex((i) => i.id === issueId);
 			const issue = issues[idx];
 			if (!issue) throw new Error(`Issue not found: ${issueId}`);
 
-			const merged = Array.from(new Set([...(issue.labels ?? []), ...newLabels]));
-			issues[idx] = { ...issue, labels: merged, updatedAt: new Date().toISOString() };
+			const existing = issue.labels ?? [];
+			added = [...new Set(newLabels)].filter((l) => !existing.includes(l));
+			if (added.length === 0) return;
+			issues[idx] = {
+				...issue,
+				labels: [...existing, ...added],
+				updatedAt: new Date().toISOString(),
+			};
 			await writeIssues(dir, issues);
 		});
 
 		if (jsonMode) {
-			await outputJson({ success: true, command: "label add", issueId, labels: newLabels });
+			await outputJson({
+				success: true,
+				command: "label add",
+				issueId,
+				labels: added,
+				changed: added.length > 0,
+			});
+		} else if (added.length === 0) {
+			console.log(`${accent(issueId)} already has label(s) ${newLabels.join(", ")}; no change`);
 		} else {
 			printSuccess(
-				`Added label(s) ${newLabels.map((l) => accent(l)).join(", ")} to ${accent(issueId)}`,
+				`Added label(s) ${added.map((l) => accent(l)).join(", ")} to ${accent(issueId)}`,
 			);
 		}
 		return;
@@ -106,12 +123,15 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		const removeSet = new Set(normalizeLabels(rawLabels));
 
+		let removed: string[] = [];
 		await withLock(issuesPath(dir), async () => {
 			const issues = await readIssues(dir);
 			const idx = issues.findIndex((i) => i.id === issueId);
 			const issue = issues[idx];
 			if (!issue) throw new Error(`Issue not found: ${issueId}`);
 
+			removed = (issue.labels ?? []).filter((l) => removeSet.has(l));
+			if (removed.length === 0) return;
 			const remaining = (issue.labels ?? []).filter((l) => !removeSet.has(l));
 			const updated: typeof issue = { ...issue, updatedAt: new Date().toISOString() };
 			if (remaining.length > 0) updated.labels = remaining;
@@ -121,9 +141,21 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		});
 
 		if (jsonMode) {
-			await outputJson({ success: true, command: "label remove", issueId, labels: [...removeSet] });
+			await outputJson({
+				success: true,
+				command: "label remove",
+				issueId,
+				labels: removed,
+				changed: removed.length > 0,
+			});
+		} else if (removed.length === 0) {
+			console.log(
+				`${accent(issueId)} has none of label(s) ${[...removeSet].join(", ")}; no change`,
+			);
 		} else {
-			printSuccess(`Removed label(s) from ${accent(issueId)}`);
+			printSuccess(
+				`Removed label(s) ${removed.map((l) => accent(l)).join(", ")} from ${accent(issueId)}`,
+			);
 		}
 		return;
 	}

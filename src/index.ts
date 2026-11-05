@@ -67,8 +67,11 @@ program
 			const opts: [string, string][] = [
 				["-h, --help", "Show help"],
 				["-v, --version", "Print version"],
-				["--format <mode>", "Output format (markdown|compact|plain|ids|json)"],
-				["--json", "Alias for --format json"],
+				["--json", "Output as JSON"],
+				[
+					"--format <mode>",
+					"list/ready/search/show/blocked/stats: markdown|compact|plain|ids|json",
+				],
 				["-q, --quiet", "Suppress non-error output"],
 				["--verbose", "Extra diagnostic output"],
 				["--timing", "Show command execution time"],

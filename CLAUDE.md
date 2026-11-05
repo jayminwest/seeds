@@ -35,6 +35,7 @@ seeds/
   scripts/
     version-bump.ts           # Bump version in package.json + src/version.ts
   src/
+    bin.ts                    # Published bin: loads index.ts, hints 'bun install' on missing deps
     index.ts                  # CLI entry + command router
     version.ts                # VERSION constant (importable without CLI side-effects)
     types.ts                  # Issue, Template, Config, constants
@@ -174,7 +175,7 @@ sd search <query>                      Substring search on title + description
 sd update <id>                         Update issue fields
   --extensions <json>                  Shallow-merge JSON object into Issue.extensions
   --clear-extensions                   Remove the extensions field
-  --claim [--as <agent>]               Atomic claim: open + unassigned (or ours) → in_progress + assignee; else exit 1
+  --claim [--as <agent>]               Atomic claim: open + unassigned (or ours) → in_progress + assignee; re-claiming our own in_progress issue succeeds; else exit 1
   --intent <r-id>                      Replace linked roots idea(s) (repeatable)
 sd close <id> [<id2> ...]              Close one or more issues
   --reason <text>
@@ -182,7 +183,7 @@ sd dep add <issue> <depends-on>        Add dependency
 sd dep remove <issue> <depends-on>     Remove dependency
 sd dep list <issue>                    Show deps for an issue
 sd block <id> --by <blocker-id>        Mark issue as blocked
-sd unblock <id> --from <blocker-id>    Remove blocker (--all to clear all)
+sd unblock <id> --from <blocker-id>    Remove blocker (--all to clear closed blockers)
 sd blocked                             Show all blocked issues
 sd label add <id> <label>              Add label to issue
 sd label remove <id> <label>           Remove label from issue
@@ -237,7 +238,7 @@ sd config unset <path>                 Remove the value at <path>
 
 ```
 sd plan templates                      List available plan templates (built-in: feature, bug, refactor)
-sd plan prompt <seed-id>               Emit structured planning prompt JSON for a seed
+sd plan prompt <seed-id>               Print a planning prompt for a seed (--json: structured plan_request)
   --template <name>                    Override the inferred template
   --domain <name>                      Force the mulch domain for prior_art enrichment
 sd plan submit <seed-id> --plan <file> Validate, spawn child seeds, write plan row

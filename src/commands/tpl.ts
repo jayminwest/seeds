@@ -15,6 +15,7 @@ import {
 	writeIssues,
 	writeTemplates,
 } from "../store.ts";
+import { normalizeTitle } from "../title.ts";
 import type { Issue, Template, TemplateStep } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
 
@@ -62,8 +63,7 @@ async function runTplStepAdd(
 	const jsonMode = opts.json === true;
 	const dir = seedsDir ?? (await findSeedsDir());
 
-	const title = opts.title;
-	if (!title) throw new Error("--title is required");
+	const title = normalizeTitle(opts.title);
 
 	const typeVal = opts.type ?? "task";
 	if (!(VALID_TYPES as readonly string[]).includes(typeVal)) {

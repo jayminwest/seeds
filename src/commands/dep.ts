@@ -70,6 +70,9 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			throw new Error(`Cannot add a self-dependency: ${issueId}`);
 		}
 
+		// A no-op (edge already present on add, absent on remove) leaves both rows
+		// and their updatedAt untouched and is reported as changed: false.
+		let changed = false;
 		await withLock(issuesPath(dir), async () => {
 			const issues = await readIssues(dir);
 			const issueIdx = issues.findIndex((i) => i.id === issueId);
@@ -79,6 +82,13 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			const depIdx = issues.findIndex((i) => i.id === dependsOnId);
 			const dep = issues[depIdx];
 			if (!dep) throw new Error(`Issue not found: ${dependsOnId}`);
+
+			const linked =
+				(issue.blockedBy ?? []).includes(dependsOnId) && (dep.blocks ?? []).includes(issueId);
+			const unlinked =
+				!(issue.blockedBy ?? []).includes(dependsOnId) && !(dep.blocks ?? []).includes(issueId);
+			if (subcmd === "add" ? linked : unlinked) return;
+			changed = true;
 
 			if (subcmd === "add") {
 				assertNoCycles(issues, [[issueId, dependsOnId]]);
@@ -102,7 +112,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		});
 
 		if (jsonMode) {
-			await outputJson({ success: true, command: `dep ${subcmd}`, issueId, dependsOnId });
+			await outputJson({ success: true, command: `dep ${subcmd}`, issueId, dependsOnId, changed });
+		} else if (!changed) {
+			const state = subcmd === "add" ? "already exists" : "does not exist";
+			console.log(
+				`Dependency ${state}: ${accent(issueId)} ${muted("→")} ${accent(dependsOnId)}; no change`,
+			);
 		} else {
 			const verb = subcmd === "add" ? "Added" : "Removed";
 			console.log(`${verb} dependency: ${accent(issueId)} ${muted("→")} ${accent(dependsOnId)}`);

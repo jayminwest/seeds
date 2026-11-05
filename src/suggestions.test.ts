@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { levenshtein, suggestForUnknown } from "./suggestions.ts";
+import { levenshtein, suggestForUnknown, unknownSubcommandMessage } from "./suggestions.ts";
 
 // Note: the previous version of this file spawned `bun run src/index.ts` per
 // assertion. The suggestion logic is pure (no I/O, no globals), so we now
@@ -89,5 +89,31 @@ describe("suggestForUnknown", () => {
 		const { suggestion, errMsg } = suggestForUnknown("create", []);
 		expect(suggestion).toBe("");
 		expect(errMsg).toBe("Unknown command: create");
+	});
+});
+
+describe("transposition typos (seeds-bde5)", () => {
+	test("adjacent swap counts as one edit", () => {
+		expect(levenshtein("lsit", "list")).toBe(1);
+		expect(levenshtein("lsit", "init")).toBe(2);
+	});
+
+	test("'lsit' suggests 'list', not 'init'", () => {
+		expect(suggestForUnknown("lsit", KNOWN).suggestion).toBe("list");
+		expect(suggestForUnknown("craete", KNOWN).suggestion).toBe("create");
+	});
+});
+
+describe("unknownSubcommandMessage", () => {
+	test("commander-style error with a hint for a near miss", () => {
+		expect(unknownSubcommandMessage("shwo", ["show", "list"])).toBe(
+			"error: unknown command 'shwo'\n(Did you mean show?)",
+		);
+	});
+
+	test("no hint when nothing is close", () => {
+		expect(unknownSubcommandMessage("ready", ["templates", "submit"])).toBe(
+			"error: unknown command 'ready'",
+		);
 	});
 });

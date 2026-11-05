@@ -78,7 +78,7 @@ JSON output is an envelope: `{success, command, ...payload}`. `command` is the f
 | `sd dep remove <issue> <depends-on>` | Remove dependency |
 | `sd dep list <issue>` | Show deps for an issue |
 | `sd block <id> --by <blocker-id>` | Mark issue as blocked by another |
-| `sd unblock <id> --from <blocker-id>` | Remove a blocker (`--all` to clear all) |
+| `sd unblock <id> --from <blocker-id>` | Remove a blocker (`--all` to clear closed blockers) |
 | `sd blocked` | Show all blocked issues |
 | `sd label add <id> <label>` | Add a label to an issue |
 | `sd label remove <id> <label>` | Remove a label from an issue |
@@ -92,7 +92,7 @@ JSON output is an envelope: `{success, command, ...payload}`. `command` is the f
 | Command | Description |
 |---------|-------------|
 | `sd plan templates` | List available plan templates |
-| `sd plan prompt <seed-id>` | Emit structured planning prompt JSON for a seed (`--template`, `--domain`) |
+| `sd plan prompt <seed-id>` | Print a planning prompt for a seed (`--json` for the structured request; `--template`, `--domain`) |
 | `sd plan submit <seed-id> --plan <file>` | Validate a plan, spawn child seeds, write the plan row (`--overwrite`, `--record-decision`, `--domain`, `--name`) |
 | `sd plan show <pl-id>` | Show a plan with sections, children, and status (recurses through nested sub-plans up to `max_plan_depth`) |
 | `sd plan validate <pl-id>` | Re-run validation against the current template definition |

@@ -19,6 +19,7 @@ import {
 	writeIssues,
 	writePlans,
 } from "../store.ts";
+import { unknownSubcommandMessage } from "../suggestions.ts";
 import type { Issue, Plan, PlanStatus, PlanTemplate, SectionSpec } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
 import { normalizeLabels } from "./label.ts";
@@ -37,7 +38,7 @@ export function register(program: Command): void {
 
 	plan
 		.command("prompt <seed-id>")
-		.description("Emit structured planning prompt JSON for a seed")
+		.description("Print a planning prompt for a seed (--json: structured plan_request)")
 		.option("--template <name>", "Override the inferred template")
 		.option("--domain <name>", "Force the mulch domain used for prior_art enrichment")
 		.option("--json", "Output as JSON")
@@ -74,6 +75,7 @@ Plan file shape:
     "template": "feature",
     "name": "Schema-driven config editor",
     "sections": {
+      "context": "Why this work matters...",
       "approach": "Plain-text approach...",
       "steps": [{ "title": "Step 1", "labels": ["nightwatch"] }, ...],
       "acceptance": ["criterion 1", ...]
@@ -274,7 +276,11 @@ Plan name resolution:
 		);
 
 	// `sd plan` (no subcommand) prints help and exits non-zero so scripted callers notice.
-	plan.action(() => {
+	// Excess args reach here only for an unknown subcommand: report it like commander does.
+	plan.allowExcessArguments().action(() => {
+		const [unknown] = plan.args;
+		const names = plan.commands.map((c) => c.name());
+		if (unknown) plan.error(unknownSubcommandMessage(unknown, names));
 		plan.outputHelp();
 		process.exitCode = 1;
 	});
