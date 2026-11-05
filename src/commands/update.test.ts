@@ -239,3 +239,40 @@ describe("sd update --status reopen", () => {
 		expect(after.issue.closeReason).toBe("done");
 	});
 });
+
+// seeds-0374: commander opts reach runUpdate directly, so values that look like
+// flags and empty strings are no longer lost in an argv round-trip.
+describe("sd update option values", () => {
+	test("--title value starting with -- is stored verbatim", async () => {
+		const id = await create("plain", tmpDir);
+		const { exitCode } = await run(["update", id, "--title", "--weird"], tmpDir);
+		expect(exitCode).toBe(0);
+		const after = await runJson<{ issue: { title: string } }>(["show", id], tmpDir);
+		expect(after.issue.title).toBe("--weird");
+	});
+
+	test("--description '' clears the description", async () => {
+		const id = await create("has-desc", tmpDir);
+		await run(["update", id, "--description", "something"], tmpDir);
+		const { exitCode } = await run(["update", id, "--description", ""], tmpDir);
+		expect(exitCode).toBe(0);
+		const after = await runJson<{ issue: { description?: string } }>(["show", id], tmpDir);
+		expect(after.issue.description).toBeUndefined();
+	});
+
+	test("--assignee '' clears the assignee", async () => {
+		const id = await create("assigned", tmpDir);
+		await run(["update", id, "--assignee", "alice"], tmpDir);
+		const { exitCode } = await run(["update", id, "--assignee", ""], tmpDir);
+		expect(exitCode).toBe(0);
+		const after = await runJson<{ issue: { assignee?: string } }>(["show", id], tmpDir);
+		expect(after.issue.assignee).toBeUndefined();
+	});
+
+	test("--priority '' is rejected instead of silently ignored", async () => {
+		const id = await create("prio", tmpDir);
+		const { exitCode, stderr } = await run(["update", id, "--priority", ""], tmpDir);
+		expect(exitCode).not.toBe(0);
+		expect(stderr).toContain("--priority must be 0-4 or P0-P4");
+	});
+});

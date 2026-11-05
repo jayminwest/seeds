@@ -192,7 +192,8 @@ export async function runCli(args: string[], cwd: string): Promise<RunResult> {
 			// flat run(args) entry point — they wire subcommands directly via
 			// commander. Build a fresh program, register, and dispatch through
 			// parseAsync to mirror the production CLI path.
-			const program = new Command();
+			// Root-level global flags mirror src/index.ts so `sd list -q` parses.
+			const program = new Command().option("-q, --quiet").option("--verbose").option("--timing");
 			program.exitOverride();
 			mod.register(program);
 			// Propagate exitOverride to subcommands recursively. Commander does

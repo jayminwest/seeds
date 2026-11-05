@@ -11,6 +11,26 @@ export interface ResolvedFormat {
 	error?: string;
 }
 
+/** Output-format options as commander hands them to an action. */
+export interface FormatOptions {
+	format?: string;
+	json?: boolean;
+}
+
+/** --format wins over --json; an unknown --format value is reported via `error`. */
+export function formatFromOptions(opts: FormatOptions): ResolvedFormat {
+	if (opts.format !== undefined) {
+		if (!isFormatMode(opts.format)) {
+			return {
+				mode: "markdown",
+				error: `Invalid --format value: ${opts.format}. Valid: ${VALID_FORMATS.join("|")}`,
+			};
+		}
+		return { mode: opts.format };
+	}
+	return { mode: opts.json ? "json" : "markdown" };
+}
+
 export function resolveFormat(args: string[]): ResolvedFormat {
 	let formatVal: string | undefined;
 	for (let i = 0; i < args.length; i++) {
@@ -22,17 +42,7 @@ export function resolveFormat(args: string[]): ResolvedFormat {
 			formatVal = arg.slice("--format=".length);
 		}
 	}
-	if (formatVal !== undefined) {
-		if (!isFormatMode(formatVal)) {
-			return {
-				mode: "markdown",
-				error: `Invalid --format value: ${formatVal}. Valid: ${VALID_FORMATS.join("|")}`,
-			};
-		}
-		return { mode: formatVal };
-	}
-	if (args.includes("--json")) return { mode: "json" };
-	return { mode: "markdown" };
+	return formatFromOptions({ format: formatVal, json: args.includes("--json") });
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: \x1b is the ESC byte required to match real ANSI escape sequences

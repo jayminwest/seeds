@@ -55,6 +55,12 @@ describe("sd create --from", () => {
 	test("rejects --from without a value", async () => {
 		const res = await runCli(["create", "--title", "x", "--from"], tmpDir);
 		expect(res.exitCode).not.toBe(0);
+		expect(res.stderr).toContain("option '--from <id>' argument missing");
+	});
+
+	test("rejects an empty --from value", async () => {
+		const res = await runCli(["create", "--title", "x", "--from", ""], tmpDir);
+		expect(res.exitCode).not.toBe(0);
 		expect(res.stderr).toContain("--from requires an issue id");
 	});
 });

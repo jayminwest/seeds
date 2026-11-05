@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { collect, collectRepeated, parseIntent } from "../intent.ts";
+import { collect, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import {
 	affectedPlanIds,
@@ -22,36 +22,24 @@ import {
 import type { Issue } from "../types.ts";
 import { VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
-function parseArgs(args: string[]) {
-	const flags: Record<string, string | boolean> = {};
-	let i = 0;
-	while (i < args.length) {
-		const arg = args[i];
-		if (!arg) {
-			i++;
-			continue;
-		}
-		if (arg.startsWith("--")) {
-			const key = arg.slice(2);
-			const eqIdx = key.indexOf("=");
-			if (eqIdx !== -1) {
-				flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
-				i++;
-			} else {
-				const next = args[i + 1];
-				if (next !== undefined && !next.startsWith("--")) {
-					flags[key] = next;
-					i += 2;
-				} else {
-					flags[key] = true;
-					i++;
-				}
-			}
-		} else {
-			i++;
-		}
-	}
-	return flags;
+export interface UpdateOptions {
+	status?: string;
+	title?: string;
+	assignee?: string;
+	description?: string;
+	desc?: string;
+	body?: string;
+	type?: string;
+	priority?: string;
+	addLabel?: string;
+	removeLabel?: string;
+	setLabels?: string;
+	extensions?: string;
+	clearExtensions?: boolean;
+	claim?: boolean;
+	as?: string;
+	intent?: string[];
+	json?: boolean;
 }
 
 // Accept only a JSON object literal (not array, scalar, or null) — extensions
@@ -72,31 +60,26 @@ function parseExtensionsPatch(raw: string): Record<string, unknown> {
 
 // --claim identity: --as wins, then $USER. --claim sets status and assignee
 // itself, so it rejects the flags it would silently override.
-function resolveClaimant(flags: Record<string, string | boolean>): string {
-	if (typeof flags.status === "string" || typeof flags.assignee === "string") {
+function resolveClaimant(opts: UpdateOptions): string {
+	if (opts.status !== undefined || opts.assignee !== undefined) {
 		throw new Error("--claim cannot be combined with --status or --assignee");
 	}
-	const as = typeof flags.as === "string" ? flags.as.trim() : (process.env.USER ?? "");
+	const as = opts.as !== undefined ? opts.as.trim() : (process.env.USER ?? "");
 	if (!as) throw new Error("--claim needs an identity: pass --as <agent>");
 	return as;
 }
 
-export async function run(args: string[], seedsDir?: string): Promise<void> {
-	const jsonMode = args.includes("--json");
-	const id = args.find((a) => !a.startsWith("--"));
-	if (!id) throw new Error("Usage: sd update <id> [flags]");
-
-	const flags = parseArgs(args);
-
+export async function runUpdate(id: string, opts: UpdateOptions, seedsDir?: string): Promise<void> {
+	const jsonMode = opts.json === true;
 	const dir = seedsDir ?? (await findSeedsDir());
 	let updated: Issue | undefined;
 	let openPlanParents: OpenPlanParent[] = [];
 
-	const claim = flags.claim === true;
-	const claimant = claim ? resolveClaimant(flags) : undefined;
-	const intentValues = collectRepeated(args, "intent");
+	const claim = opts.claim === true;
+	const claimant = claim ? resolveClaimant(opts) : undefined;
+	const intentValues = opts.intent ?? [];
 	const intent = intentValues.length > 0 ? parseIntent(intentValues) : undefined;
-	const statusChanging = typeof flags.status === "string" || claim;
+	const statusChanging = opts.status !== undefined || claim;
 	const inner = async () => {
 		const issues = await readIssues(dir);
 		const idx = issues.findIndex((i) => i.id === id);
@@ -120,8 +103,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		if (intent !== undefined) patch.intent = intent;
 
-		if (typeof flags.status === "string") {
-			const s = flags.status;
+		if (opts.status !== undefined) {
+			const s = opts.status;
 			if (!(VALID_STATUSES as readonly string[]).includes(s)) {
 				throw new Error(`Invalid --status value: ${s}. Valid: ${VALID_STATUSES.join("|")}`);
 			}
@@ -139,49 +122,44 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				patch.closedAt = now;
 			}
 		}
-		if (typeof flags.title === "string") {
-			const trimmedTitle = flags.title.trim();
+		if (opts.title !== undefined) {
+			const trimmedTitle = opts.title.trim();
 			if (trimmedTitle === "") {
 				throw new Error("--title must not be empty");
 			}
 			patch.title = trimmedTitle;
 		}
-		if (typeof flags.assignee === "string") patch.assignee = flags.assignee;
-		const desc =
-			typeof flags.description === "string"
-				? flags.description
-				: typeof flags.desc === "string"
-					? flags.desc
-					: flags.body;
-		if (typeof desc === "string") patch.description = desc;
-		if (typeof flags.type === "string") {
-			const t = flags.type;
+		// An empty --assignee / --description clears the field rather than storing "".
+		if (opts.assignee !== undefined) patch.assignee = opts.assignee || undefined;
+		const desc = opts.description ?? opts.desc ?? opts.body;
+		if (desc !== undefined) patch.description = desc || undefined;
+		if (opts.type !== undefined) {
+			const t = opts.type;
 			if (!(VALID_TYPES as readonly string[]).includes(t)) {
 				throw new Error(`Invalid --type value: ${t}. Valid: ${VALID_TYPES.join("|")}`);
 			}
 			patch.type = t as Issue["type"];
 		}
-		if (typeof flags.priority === "string") {
-			const p = parsePriority(flags.priority);
+		if (opts.priority !== undefined) {
+			const p = parsePriority(opts.priority);
 			if (!isValidPriority(p)) throw new Error(PRIORITY_ERROR);
 			patch.priority = p;
 		}
 
-		const extPatchProvided = typeof flags.extensions === "string";
-		const clearExt = flags["clear-extensions"] === true;
-		if (extPatchProvided && clearExt) {
+		const clearExt = opts.clearExtensions === true;
+		if (opts.extensions !== undefined && clearExt) {
 			throw new Error("--extensions and --clear-extensions are mutually exclusive");
 		}
 		if (clearExt) {
 			patch.extensions = undefined;
-		} else if (extPatchProvided) {
-			const incoming = parseExtensionsPatch(flags.extensions as string);
+		} else if (opts.extensions !== undefined) {
+			const incoming = parseExtensionsPatch(opts.extensions);
 			const merged: Record<string, unknown> = { ...(issue.extensions ?? {}), ...incoming };
 			patch.extensions = Object.keys(merged).length > 0 ? merged : undefined;
 		}
 
-		if (typeof flags["set-labels"] === "string") {
-			const val = flags["set-labels"];
+		if (opts.setLabels !== undefined) {
+			const val = opts.setLabels;
 			if (val === "") {
 				patch.labels = undefined;
 			} else {
@@ -192,8 +170,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				patch.labels = parsed.length > 0 ? parsed : undefined;
 			}
 		}
-		if (typeof flags["add-label"] === "string") {
-			const toAdd = flags["add-label"]
+		if (opts.addLabel !== undefined) {
+			const toAdd = opts.addLabel
 				.split(",")
 				.map((l) => l.trim().toLowerCase())
 				.filter(Boolean);
@@ -201,8 +179,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			const merged = Array.from(new Set([...base, ...toAdd]));
 			patch.labels = merged.length > 0 ? merged : undefined;
 		}
-		if (typeof flags["remove-label"] === "string") {
-			const toRemove = new Set(flags["remove-label"].split(",").map((l) => l.trim().toLowerCase()));
+		if (opts.removeLabel !== undefined) {
+			const toRemove = new Set(opts.removeLabel.split(",").map((l) => l.trim().toLowerCase()));
 			const base = patch.labels ?? issue.labels ?? [];
 			const remaining = base.filter((l) => !toRemove.has(l));
 			patch.labels = remaining.length > 0 ? remaining : undefined;
@@ -265,48 +243,7 @@ export function register(program: Command): void {
 		.option("--as <agent>", "Identity for --claim (default: $USER)")
 		.option("--intent <r-id>", "Set linked roots idea(s) (repeatable, replaces)", collect, [])
 		.option("--json", "Output as JSON")
-		.action(
-			async (
-				id: string,
-				opts: {
-					status?: string;
-					title?: string;
-					assignee?: string;
-					description?: string;
-					desc?: string;
-					body?: string;
-					type?: string;
-					priority?: string;
-					addLabel?: string;
-					removeLabel?: string;
-					setLabels?: string;
-					extensions?: string;
-					clearExtensions?: boolean;
-					claim?: boolean;
-					as?: string;
-					intent: string[];
-					json?: boolean;
-				},
-			) => {
-				const args: string[] = [id];
-				if (opts.status) args.push("--status", opts.status);
-				if (opts.title !== undefined) args.push("--title", opts.title);
-				if (opts.assignee) args.push("--assignee", opts.assignee);
-				if (opts.description) args.push("--description", opts.description);
-				if (opts.desc) args.push("--desc", opts.desc);
-				if (opts.body) args.push("--body", opts.body);
-				if (opts.type) args.push("--type", opts.type);
-				if (opts.priority) args.push("--priority", opts.priority);
-				if (opts.addLabel) args.push("--add-label", opts.addLabel);
-				if (opts.removeLabel) args.push("--remove-label", opts.removeLabel);
-				if (opts.setLabels !== undefined) args.push("--set-labels", opts.setLabels);
-				if (opts.extensions !== undefined) args.push("--extensions", opts.extensions);
-				if (opts.clearExtensions) args.push("--clear-extensions");
-				if (opts.claim) args.push("--claim");
-				if (opts.as) args.push("--as", opts.as);
-				for (const r of opts.intent) args.push("--intent", r);
-				if (opts.json) args.push("--json");
-				await run(args);
-			},
-		);
+		.action(async (id: string, opts: UpdateOptions) => {
+			await runUpdate(id, opts);
+		});
 }

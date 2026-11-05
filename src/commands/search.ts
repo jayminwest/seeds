@@ -1,7 +1,12 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { applyIssueFilters, filterOptionsFromFlags, parseLimitFlag } from "../filter.ts";
-import { resolveFormat, stripAnsi, VALID_FORMATS } from "../format.ts";
+import {
+	applyIssueFilters,
+	type FilterFlags,
+	filterOptionsFromFlags,
+	parseLimitFlag,
+} from "../filter.ts";
+import { type FormatOptions, formatFromOptions, stripAnsi, VALID_FORMATS } from "../format.ts";
 import {
 	formatIssueOneLine,
 	formatIssueOneLineCompact,
@@ -20,41 +25,10 @@ import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
-function parseArgs(args: string[]): {
-	flags: Record<string, string | boolean>;
-	positionals: string[];
-} {
-	const flags: Record<string, string | boolean> = {};
-	const positionals: string[] = [];
-	let i = 0;
-	while (i < args.length) {
-		const arg = args[i];
-		if (!arg) {
-			i++;
-			continue;
-		}
-		if (arg.startsWith("--")) {
-			const key = arg.slice(2);
-			const eqIdx = key.indexOf("=");
-			if (eqIdx !== -1) {
-				flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
-				i++;
-			} else {
-				const next = args[i + 1];
-				if (next !== undefined && !next.startsWith("--")) {
-					flags[key] = next;
-					i += 2;
-				} else {
-					flags[key] = true;
-					i++;
-				}
-			}
-		} else {
-			positionals.push(arg);
-			i++;
-		}
-	}
-	return { flags, positionals };
+interface SearchOptions extends FilterFlags, FormatOptions {
+	status?: string;
+	limit?: string;
+	sort?: string;
 }
 
 function matchesQuery(issue: Issue, needle: string): boolean {
@@ -64,8 +38,8 @@ function matchesQuery(issue: Issue, needle: string): boolean {
 	return desc.includes(needle);
 }
 
-export async function run(args: string[], seedsDir?: string): Promise<void> {
-	const fmt = resolveFormat(args);
+async function runSearch(query: string, opts: SearchOptions, seedsDir?: string): Promise<void> {
+	const fmt = formatFromOptions(opts);
 	const jsonMode = fmt.mode === "json";
 	if (fmt.error) {
 		if (jsonMode) {
@@ -76,9 +50,6 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	const { flags, positionals } = parseArgs(args);
-
-	const query = positionals[0];
 	if (!query) {
 		const msg = "Usage: sd search <query> [filters]";
 		if (jsonMode) {
@@ -91,7 +62,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 	const needle = query.toLowerCase();
 
-	const statusFilter = typeof flags.status === "string" ? flags.status : undefined;
+	const statusFilter = opts.status;
 	if (statusFilter && !(VALID_STATUSES as readonly string[]).includes(statusFilter)) {
 		const msg = `Invalid --status value: ${statusFilter}. Valid: ${VALID_STATUSES.join("|")}`;
 		if (jsonMode) {
@@ -102,7 +73,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	const typeFilter = typeof flags.type === "string" ? flags.type : undefined;
+	const typeFilter = opts.type;
 	if (typeFilter && !(VALID_TYPES as readonly string[]).includes(typeFilter)) {
 		const msg = `Invalid --type value: ${typeFilter}. Valid: ${VALID_TYPES.join("|")}`;
 		if (jsonMode) {
@@ -115,7 +86,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 	let limit: number;
 	try {
-		limit = parseLimitFlag(flags.limit);
+		limit = parseLimitFlag(opts.limit);
 	} catch (e) {
 		const msg = (e as Error).message;
 		if (jsonMode) {
@@ -140,9 +111,9 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 
 	issues = issues.filter((i) => matchesQuery(i, needle));
-	issues = applyIssueFilters(issues, filterOptionsFromFlags(flags));
+	issues = applyIssueFilters(issues, filterOptionsFromFlags(opts));
 
-	const sortFlag = typeof flags.sort === "string" ? flags.sort : "priority";
+	const sortFlag = opts.sort ?? "priority";
 	if (!isSortMode(sortFlag)) {
 		const msg = `Invalid --sort value: ${sortFlag}. Valid: ${VALID_SORT_MODES.join("|")}`;
 		if (jsonMode) {
@@ -218,38 +189,7 @@ export function register(program: Command): void {
 		.option("--sort <mode>", "Sort order (priority|created|updated|id)", "priority")
 		.option("--format <mode>", `Output format (${VALID_FORMATS.join("|")})`)
 		.option("--json", "Output as JSON (alias for --format json)")
-		.action(
-			async (
-				query: string,
-				opts: {
-					status?: string;
-					type?: string;
-					assignee?: string;
-					label?: string;
-					labelAny?: string;
-					unlabeled?: boolean;
-					priority?: string;
-					priorityMax?: string;
-					limit?: string;
-					sort?: string;
-					format?: string;
-					json?: boolean;
-				},
-			) => {
-				const args: string[] = [query];
-				if (opts.status) args.push("--status", opts.status);
-				if (opts.type) args.push("--type", opts.type);
-				if (opts.assignee) args.push("--assignee", opts.assignee);
-				if (opts.label) args.push("--label", opts.label);
-				if (opts.labelAny) args.push("--label-any", opts.labelAny);
-				if (opts.unlabeled) args.push("--unlabeled");
-				if (opts.priority) args.push("--priority", opts.priority);
-				if (opts.priorityMax) args.push("--priority-max", opts.priorityMax);
-				if (opts.limit) args.push("--limit", opts.limit);
-				if (opts.sort) args.push("--sort", opts.sort);
-				if (opts.format) args.push("--format", opts.format);
-				if (opts.json) args.push("--json");
-				await run(args);
-			},
-		);
+		.action(async (query: string, opts: SearchOptions) => {
+			await runSearch(query, opts);
+		});
 }

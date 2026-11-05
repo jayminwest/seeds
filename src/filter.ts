@@ -79,11 +79,20 @@ export function applyIssueFilters(issues: Issue[], opts: IssueFilterOptions): Is
 	return result;
 }
 
-export function filterOptionsFromFlags(
-	flags: Record<string, string | boolean>,
-): IssueFilterOptions {
+/** Filter options as commander hands them to a list/ready/search action. */
+export interface FilterFlags {
+	type?: string;
+	assignee?: string;
+	label?: string;
+	labelAny?: string;
+	unlabeled?: boolean;
+	priority?: string;
+	priorityMax?: string;
+}
+
+export function filterOptionsFromFlags(flags: FilterFlags): IssueFilterOptions {
 	let priority: Set<number> | undefined;
-	if (typeof flags.priority === "string") {
+	if (flags.priority !== undefined) {
 		const tokens = flags.priority
 			.split(",")
 			.map((t) => t.trim())
@@ -93,14 +102,12 @@ export function filterOptionsFromFlags(
 		}
 	}
 	const priorityMax =
-		typeof flags["priority-max"] === "string"
-			? parsePriorityToken(flags["priority-max"])
-			: undefined;
+		flags.priorityMax !== undefined ? parsePriorityToken(flags.priorityMax) : undefined;
 	return {
-		type: typeof flags.type === "string" ? flags.type : undefined,
-		assignee: typeof flags.assignee === "string" ? flags.assignee : undefined,
-		label: typeof flags.label === "string" ? flags.label : undefined,
-		labelAny: typeof flags["label-any"] === "string" ? flags["label-any"] : undefined,
+		type: flags.type,
+		assignee: flags.assignee,
+		label: flags.label,
+		labelAny: flags.labelAny,
 		unlabeled: flags.unlabeled === true,
 		priority,
 		priorityMax,

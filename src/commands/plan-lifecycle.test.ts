@@ -7,8 +7,8 @@ import { computeNextPlanStatus, openParentsOfDonePlans } from "../plan-lifecycle
 import { readIssues, readPlans, writeIssues, writePlans } from "../store.ts";
 import { runCli } from "../test-harness.ts";
 import type { Issue, Plan } from "../types.ts";
-import { run as closeRun } from "./close.ts";
-import { run as updateRun } from "./update.ts";
+import { runClose as closeRun } from "./close.ts";
+import { runUpdate as updateRun } from "./update.ts";
 
 let dir: string;
 let seedsDir: string;
@@ -135,7 +135,7 @@ describe("update --status hook — flips plan status", () => {
 			[makePlan("pl-1", "approved", ["c1", "c2"])],
 			[makeIssue("c1", "open", { plan_id: "pl-1" }), makeIssue("c2", "open", { plan_id: "pl-1" })],
 		);
-		await updateRun(["c1", "--status", "in_progress"], seedsDir);
+		await updateRun("c1", { status: "in_progress" }, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("active");
 	});
@@ -144,7 +144,7 @@ describe("update --status hook — flips plan status", () => {
 		const plan = makePlan("pl-1", "active", ["c1"]);
 		const before = plan.updatedAt;
 		await seed([plan], [makeIssue("c1", "in_progress", { plan_id: "pl-1" })]);
-		await updateRun(["c1", "--status", "in_progress"], seedsDir);
+		await updateRun("c1", { status: "in_progress" }, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("active");
 		expect(plans[0]?.updatedAt).toBe(before); // not bumped — no change
@@ -158,14 +158,14 @@ describe("update --status hook — flips plan status", () => {
 				makeIssue("c2", "closed", { plan_id: "pl-1" }),
 			],
 		);
-		await updateRun(["c1", "--status", "open"], seedsDir);
+		await updateRun("c1", { status: "open" }, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("active");
 	});
 
 	test("draft plan is never auto-promoted", async () => {
 		await seed([makePlan("pl-1", "draft", ["c1"])], [makeIssue("c1", "open", { plan_id: "pl-1" })]);
-		await updateRun(["c1", "--status", "in_progress"], seedsDir);
+		await updateRun("c1", { status: "in_progress" }, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("draft");
 	});
@@ -173,7 +173,7 @@ describe("update --status hook — flips plan status", () => {
 	test("non-status updates do NOT affect plan status (or its updatedAt)", async () => {
 		const plan = makePlan("pl-1", "approved", ["c1"]);
 		await seed([plan], [makeIssue("c1", "open", { plan_id: "pl-1" })]);
-		await updateRun(["c1", "--title", "new title"], seedsDir);
+		await updateRun("c1", { title: "new title" }, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("approved");
 		expect(plans[0]?.updatedAt).toBe(plan.updatedAt);
@@ -189,7 +189,7 @@ describe("close hook — flips plan to done when last child closes", () => {
 				makeIssue("c2", "in_progress", { plan_id: "pl-1" }),
 			],
 		);
-		await closeRun(["c2"], seedsDir);
+		await closeRun(["c2"], {}, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("done");
 	});
@@ -202,7 +202,7 @@ describe("close hook — flips plan to done when last child closes", () => {
 				makeIssue("c2", "open", { plan_id: "pl-1" }),
 			],
 		);
-		await closeRun(["c1"], seedsDir);
+		await closeRun(["c1"], {}, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("active");
 	});
@@ -212,14 +212,14 @@ describe("close hook — flips plan to done when last child closes", () => {
 			[makePlan("pl-1", "approved", ["c1", "c2"])],
 			[makeIssue("c1", "open", { plan_id: "pl-1" }), makeIssue("c2", "open", { plan_id: "pl-1" })],
 		);
-		await closeRun(["c1", "c2"], seedsDir);
+		await closeRun(["c1", "c2"], {}, seedsDir);
 		const plans = await readPlans(seedsDir);
 		expect(plans[0]?.status).toBe("done");
 	});
 
 	test("issues without a plan_id leave plans untouched", async () => {
 		await seed([], [makeIssue("orphan", "open")]);
-		await closeRun(["orphan"], seedsDir);
+		await closeRun(["orphan"], {}, seedsDir);
 		const issues = await readIssues(seedsDir);
 		expect(issues.find((i) => i.id === "orphan")?.status).toBe("closed");
 	});
@@ -234,19 +234,19 @@ describe("full lifecycle walk-through", () => {
 		);
 
 		// approved → active
-		await updateRun(["c1", "--status", "in_progress"], seedsDir);
+		await updateRun("c1", { status: "in_progress" }, seedsDir);
 		expect((await readPlans(seedsDir))[0]?.status).toBe("active");
 
 		// active → done
-		await closeRun(["c1", "c2"], seedsDir);
+		await closeRun(["c1", "c2"], {}, seedsDir);
 		expect((await readPlans(seedsDir))[0]?.status).toBe("done");
 
 		// done → active (reopen one)
-		await updateRun(["c1", "--status", "open"], seedsDir);
+		await updateRun("c1", { status: "open" }, seedsDir);
 		expect((await readPlans(seedsDir))[0]?.status).toBe("active");
 
 		// active → done (close again)
-		await closeRun(["c1"], seedsDir);
+		await closeRun(["c1"], {}, seedsDir);
 		expect((await readPlans(seedsDir))[0]?.status).toBe("done");
 	});
 });

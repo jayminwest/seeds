@@ -1,7 +1,12 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
-import { applyIssueFilters, filterOptionsFromFlags, parseLimitFlag } from "../filter.ts";
-import { resolveFormat, stripAnsi, VALID_FORMATS } from "../format.ts";
+import {
+	applyIssueFilters,
+	type FilterFlags,
+	filterOptionsFromFlags,
+	parseLimitFlag,
+} from "../filter.ts";
+import { type FormatOptions, formatFromOptions, stripAnsi, VALID_FORMATS } from "../format.ts";
 import {
 	formatIssueOneLine,
 	formatIssueOneLineCompact,
@@ -63,40 +68,14 @@ export function readyIssues(issues: Issue[], planCtx: PlanContext): Issue[] {
 	});
 }
 
-function parseArgs(args: string[]): Record<string, string | boolean> {
-	const flags: Record<string, string | boolean> = {};
-	let i = 0;
-	while (i < args.length) {
-		const arg = args[i];
-		if (!arg) {
-			i++;
-			continue;
-		}
-		if (arg.startsWith("--")) {
-			const key = arg.slice(2);
-			const eqIdx = key.indexOf("=");
-			if (eqIdx !== -1) {
-				flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
-				i++;
-			} else {
-				const next = args[i + 1];
-				if (next !== undefined && !next.startsWith("--")) {
-					flags[key] = next;
-					i += 2;
-				} else {
-					flags[key] = true;
-					i++;
-				}
-			}
-		} else {
-			i++;
-		}
-	}
-	return flags;
+interface ReadyOptions extends FilterFlags, FormatOptions {
+	limit?: string;
+	sort?: string;
+	respectSchedule?: boolean;
 }
 
-export async function run(args: string[], seedsDir?: string): Promise<void> {
-	const fmt = resolveFormat(args);
+async function runReady(opts: ReadyOptions, seedsDir?: string): Promise<void> {
+	const fmt = formatFromOptions(opts);
 	const jsonMode = fmt.mode === "json";
 	if (fmt.error) {
 		if (jsonMode) {
@@ -107,8 +86,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	const flags = parseArgs(args);
-	const typeFilter = typeof flags.type === "string" ? flags.type : undefined;
+	const typeFilter = opts.type;
 	if (typeFilter && !(VALID_TYPES as readonly string[]).includes(typeFilter)) {
 		const msg = `Invalid --type value: ${typeFilter}. Valid: ${VALID_TYPES.join("|")}`;
 		if (jsonMode) {
@@ -121,7 +99,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 	let limit: number;
 	try {
-		limit = parseLimitFlag(flags.limit);
+		limit = parseLimitFlag(opts.limit);
 	} catch (e) {
 		const msg = (e as Error).message;
 		if (jsonMode) {
@@ -140,14 +118,14 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const closedIds = new Set(issues.filter((i: Issue) => i.status === "closed").map((i) => i.id));
 	let ready = readyIssues(issues, planCtx);
 
-	ready = applyIssueFilters(ready, filterOptionsFromFlags(flags));
+	ready = applyIssueFilters(ready, filterOptionsFromFlags(opts));
 
-	if (flags["respect-schedule"] === true) {
+	if (opts.respectSchedule === true) {
 		const nowMs = Date.now();
 		ready = ready.filter((i) => !isScheduledOut(i, nowMs));
 	}
 
-	const sortFlag = typeof flags.sort === "string" ? flags.sort : "priority";
+	const sortFlag = opts.sort ?? "priority";
 	if (!isSortMode(sortFlag)) {
 		const msg = `Invalid --sort value: ${sortFlag}. Valid: ${VALID_SORT_MODES.join("|")}`;
 		if (jsonMode) {
@@ -229,35 +207,7 @@ export function register(program: Command): void {
 			"--respect-schedule",
 			"Exclude issues with extensions.queued=true or future extensions.scheduledFor",
 		)
-		.action(
-			async (opts: {
-				type?: string;
-				assignee?: string;
-				label?: string;
-				labelAny?: string;
-				unlabeled?: boolean;
-				priority?: string;
-				priorityMax?: string;
-				limit?: string;
-				sort?: string;
-				format?: string;
-				json?: boolean;
-				respectSchedule?: boolean;
-			}) => {
-				const args: string[] = [];
-				if (opts.type) args.push("--type", opts.type);
-				if (opts.assignee) args.push("--assignee", opts.assignee);
-				if (opts.label) args.push("--label", opts.label);
-				if (opts.labelAny) args.push("--label-any", opts.labelAny);
-				if (opts.unlabeled) args.push("--unlabeled");
-				if (opts.priority) args.push("--priority", opts.priority);
-				if (opts.priorityMax) args.push("--priority-max", opts.priorityMax);
-				if (opts.limit) args.push("--limit", opts.limit);
-				if (opts.sort) args.push("--sort", opts.sort);
-				if (opts.format) args.push("--format", opts.format);
-				if (opts.json) args.push("--json");
-				if (opts.respectSchedule) args.push("--respect-schedule");
-				await run(args);
-			},
-		);
+		.action(async (opts: ReadyOptions) => {
+			await runReady(opts);
+		});
 }

@@ -1,71 +1,46 @@
 import { type Command, Option } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
 import { generateId } from "../id.ts";
-import { collect, collectRepeated, parseIntent } from "../intent.ts";
+import { collect, parseIntent } from "../intent.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { isValidPriority, PRIORITY_ERROR, parsePriority } from "../priority.ts";
 import { appendIssue, issuesPath, readIssues, withLock } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { VALID_TYPES } from "../types.ts";
 
-function parseArgs(args: string[]) {
-	const flags: Record<string, string | boolean> = {};
-	let i = 0;
-	while (i < args.length) {
-		const arg = args[i];
-		if (!arg) {
-			i++;
-			continue;
-		}
-		if (arg.startsWith("--")) {
-			const key = arg.slice(2);
-			const eqIdx = key.indexOf("=");
-			if (eqIdx !== -1) {
-				flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
-				i++;
-			} else {
-				const next = args[i + 1];
-				if (next !== undefined && !next.startsWith("--")) {
-					flags[key] = next;
-					i += 2;
-				} else {
-					flags[key] = true;
-					i++;
-				}
-			}
-		} else {
-			i++;
-		}
-	}
-	return flags;
+interface CreateOptions {
+	title: string;
+	type?: string;
+	priority?: string;
+	assignee?: string;
+	description?: string;
+	desc?: string;
+	body?: string;
+	labels?: string;
+	label?: string;
+	from?: string;
+	intent?: string[];
+	json?: boolean;
 }
 
-export async function run(args: string[], seedsDir?: string): Promise<void> {
-	const jsonMode = args.includes("--json");
-	const flags = parseArgs(args);
-	const title = flags.title;
-	if (!title || typeof title !== "string" || !title.trim()) {
-		throw new Error("--title is required");
-	}
+async function runCreate(opts: CreateOptions, seedsDir?: string): Promise<void> {
+	const jsonMode = opts.json === true;
+	const title = opts.title;
+	if (!title.trim()) throw new Error("--title is required");
 
-	const typeVal = flags.type ?? "task";
-	if (typeof typeVal !== "string" || !(VALID_TYPES as readonly string[]).includes(typeVal)) {
+	const typeVal = opts.type ?? "task";
+	if (!(VALID_TYPES as readonly string[]).includes(typeVal)) {
 		throw new Error(`Invalid --type value: ${typeVal}. Valid: ${VALID_TYPES.join("|")}`);
 	}
 	const issueType = typeVal as Issue["type"];
 
-	const priority = parsePriority(flags.priority);
+	const priority = parsePriority(opts.priority);
 	if (!isValidPriority(priority)) {
 		throw new Error(PRIORITY_ERROR);
 	}
 
 	// --label is a hidden alias for --labels; --labels wins when both are supplied.
-	const labelsRaw =
-		typeof flags.labels === "string"
-			? flags.labels
-			: typeof flags.label === "string"
-				? flags.label
-				: undefined;
+	const labelsRaw = opts.labels ?? opts.label;
 	const labels = labelsRaw
 		? labelsRaw
 				.split(",")
@@ -73,19 +48,11 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				.filter(Boolean)
 		: undefined;
 
-	const assignee = typeof flags.assignee === "string" ? flags.assignee : undefined;
-	const description =
-		typeof flags.description === "string"
-			? flags.description
-			: typeof flags.desc === "string"
-				? flags.desc
-				: typeof flags.body === "string"
-					? flags.body
-					: undefined;
-
-	const intent = parseIntent(collectRepeated(args, "intent"));
-	if (flags.from === true) throw new Error("--from requires an issue id");
-	const from = typeof flags.from === "string" ? flags.from.trim() : undefined;
+	const assignee = opts.assignee;
+	const description = opts.description ?? opts.desc ?? opts.body;
+	const intent = parseIntent(opts.intent ?? []);
+	const from = opts.from?.trim();
+	if (from === "") throw new Error("--from requires an issue id");
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const config = await readConfig(dir);
@@ -138,35 +105,7 @@ export function register(program: Command): void {
 		.option("--from <id>", "Record the issue this was discovered from (provenance, non-blocking)")
 		.option("--intent <r-id>", "Link to a roots idea (repeatable)", collect, [])
 		.option("--json", "Output as JSON")
-		.action(
-			async (opts: {
-				title: string;
-				type?: string;
-				priority?: string;
-				assignee?: string;
-				description?: string;
-				desc?: string;
-				body?: string;
-				labels?: string;
-				label?: string;
-				from?: string;
-				intent: string[];
-				json?: boolean;
-			}) => {
-				const args: string[] = ["--title", opts.title];
-				if (opts.type) args.push("--type", opts.type);
-				if (opts.priority) args.push("--priority", opts.priority);
-				if (opts.assignee) args.push("--assignee", opts.assignee);
-				if (opts.description) args.push("--description", opts.description);
-				if (opts.desc) args.push("--desc", opts.desc);
-				if (opts.body) args.push("--body", opts.body);
-				// --labels wins over --label alias when both are supplied.
-				if (opts.labels) args.push("--labels", opts.labels);
-				else if (opts.label) args.push("--labels", opts.label);
-				if (opts.from) args.push("--from", opts.from);
-				for (const r of opts.intent) args.push("--intent", r);
-				if (opts.json) args.push("--json");
-				await run(args);
-			},
-		);
+		.action(async (opts: CreateOptions) => {
+			await runCreate(opts);
+		});
 }

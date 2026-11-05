@@ -9,25 +9,6 @@ import type { Issue } from "./types.ts";
 
 const INTENT_RE = /^r-[0-9a-f]{4,8}$/;
 
-/** Every value of a repeatable `--<name> <v>` / `--<name>=<v>` flag, in order. */
-export function collectRepeated(args: string[], name: string): string[] {
-	const out: string[] = [];
-	const flag = `--${name}`;
-	for (let i = 0; i < args.length; i++) {
-		const arg = args[i];
-		if (arg === flag) {
-			const next = args[i + 1];
-			if (next !== undefined && !next.startsWith("--")) {
-				out.push(next);
-				i++;
-			}
-		} else if (arg?.startsWith(`${flag}=`)) {
-			out.push(arg.slice(flag.length + 1));
-		}
-	}
-	return out;
-}
-
 /**
  * Normalise and validate --intent values. Accepts comma-separated lists too.
  * Returns the Issue.intent value (string for one id, string[] for several),

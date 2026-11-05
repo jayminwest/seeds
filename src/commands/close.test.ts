@@ -150,7 +150,16 @@ describe("sd close", () => {
 	test("missing positional ids errors out", async () => {
 		const { exitCode, stderr } = await run(["close"], tmpDir);
 		expect(exitCode).not.toBe(0);
-		expect(stderr).toContain("Usage: sd close");
+		expect(stderr).toContain("missing required argument 'id'");
+	});
+
+	test("--reason value starting with -- is stored verbatim (seeds-0374)", async () => {
+		const a = await createSeed("A", tmpDir);
+		const { exitCode, stdout } = await run(["close", a, "--reason", "--json"], tmpDir);
+		expect(exitCode).toBe(0);
+		expect(stdout).toContain(`Closed ${a} — --json`);
+		const out = await runJson<{ issue: { closeReason?: string } }>(["show", a], tmpDir);
+		expect(out.issue.closeReason).toBe("--json");
 	});
 
 	test("unknown id throws and exits non-zero", async () => {
