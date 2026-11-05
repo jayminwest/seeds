@@ -14,8 +14,8 @@ export interface IssueFilterOptions {
  * Parse a --limit flag value.
  *
  * Returns the default when the flag is absent. Throws on negative, fractional,
- * or non-numeric input. Accepts 0 (callers should treat 0 as "return no rows",
- * not "use the default").
+ * or non-numeric input. `0` means "no limit" and returns Infinity, which
+ * `Array.prototype.slice(0, limit)` treats as "keep every row".
  */
 export function parseLimitFlag(raw: unknown, defaultValue = 50): number {
 	if (raw === undefined || raw === null || raw === "") return defaultValue;
@@ -26,7 +26,8 @@ export function parseLimitFlag(raw: unknown, defaultValue = 50): number {
 	if (!/^\d+$/.test(trimmed)) {
 		throw new Error(`Invalid --limit "${raw}": must be a non-negative integer`);
 	}
-	return Number.parseInt(trimmed, 10);
+	const n = Number.parseInt(trimmed, 10);
+	return n === 0 ? Number.POSITIVE_INFINITY : n;
 }
 
 function splitLabels(value: string): string[] {

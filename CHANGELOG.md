@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sd list` no longer truncates silently. `--json` and `--format ids` are uncapped by default (consumers treat them as the complete set); human formats still cap at 50 but the footer reads `50 of N issue(s) shown (use --limit 0 for all)` (compact writes it to stderr). `list --json` adds `total` (pre-limit count) and `truncated`. `--limit 0` now means "no limit" for `list`, `ready`, and `search` instead of returning zero rows. (seeds-dd20)
+
 ## [0.6.0] - 2026-09-29
 
 ### Added

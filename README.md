@@ -67,7 +67,7 @@ Every command supports `--json` for structured output. `sd list`, `sd ready`, `s
 | `sd init` | Initialize `.seeds/` in current directory |
 | `sd create --title <text>` | Create a new issue (`--type`, `--priority`, `--description`, `--assignee`, `--from <id>` provenance, `--intent <r-id>` repeatable roots link) |
 | `sd show <id> [<id2> ...]` | Show one or more issue details (each format separates entries: human uses a horizontal rule, plain uses blank lines, JSON returns an `issues` array) |
-| `sd list` | List issues with filters (`--status`, `--type`, `--assignee`, `--label`, `--priority`, `--priority-max`, `--limit`, `--all`, `--sort`, `--format`) |
+| `sd list` | List issues with filters (`--status`, `--type`, `--assignee`, `--label`, `--priority`, `--priority-max`, `--limit` (0 = all; `--json`/`ids` uncapped by default), `--all`, `--sort`, `--format`) |
 | `sd ready` | Open issues with no unresolved blockers (`--type`, `--assignee`, `--label`, `--label-any`, `--unlabeled`, `--priority`, `--priority-max`, `--limit`, `--sort`, `--format`, `--respect-schedule`) |
 | `sd search <query>` | Case-insensitive substring search on title + description (`--status`, `--type`, `--assignee`, `--label`, `--label-any`, `--unlabeled`, `--priority`, `--priority-max`, `--limit`, `--sort`, `--format`) |
 | `sd update <id>` | Update issue fields (`--status`, `--title`, `--priority`, `--assignee`, `--description`, `--extensions`, `--clear-extensions`, `--intent`, `--claim [--as <agent>]` atomic claim) |

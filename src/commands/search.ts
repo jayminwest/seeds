@@ -214,7 +214,7 @@ export function register(program: Command): void {
 		.option("--unlabeled", "Filter: issues with no labels")
 		.option("--priority <levels>", "Filter by priority (comma-separated, e.g. 0,1 or P0,P1)")
 		.option("--priority-max <n>", "Filter to priority <= n (e.g. --priority-max 1 = P0+P1)")
-		.option("--limit <n>", "Max issues to show", "50")
+		.option("--limit <n>", "Max issues to show; 0 = no limit", "50")
 		.option("--sort <mode>", "Sort order (priority|created|updated|id)", "priority")
 		.option("--format <mode>", `Output format (${VALID_FORMATS.join("|")})`)
 		.option("--json", "Output as JSON (alias for --format json)")

@@ -20,6 +20,18 @@ import { readIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
 import { VALID_STATUSES, VALID_TYPES } from "../types.ts";
 
+/** Row cap for human-readable formats when --limit is absent. */
+const DEFAULT_HUMAN_LIMIT = 50;
+
+/**
+ * Footer for human formats. Names the total when rows were cut so truncation
+ * is never silent.
+ */
+function countFooter(shown: number, total: number): string {
+	if (shown === total) return `${total} issue(s)`;
+	return `${shown} of ${total} issue(s) shown (use --limit 0 for all)`;
+}
+
 function parseArgs(args: string[]) {
 	const flags: Record<string, string | boolean> = {};
 	let i = 0;
@@ -91,7 +103,10 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const showAll = flags.all === true;
 	let limit: number;
 	try {
-		limit = parseLimitFlag(flags.limit);
+		// Machine formats (json, ids) are consumed as the complete set, so they are
+		// uncapped by default; human formats keep a screenful and say so in the footer.
+		const machine = fmt.mode === "json" || fmt.mode === "ids";
+		limit = parseLimitFlag(flags.limit, machine ? Number.POSITIVE_INFINITY : DEFAULT_HUMAN_LIMIT);
 	} catch (e) {
 		const msg = (e as Error).message;
 		if (jsonMode) {
@@ -131,7 +146,9 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	}
 	issues = sortIssues(issues, sortFlag);
 
+	const total = issues.length;
 	issues = issues.slice(0, limit);
+	const truncated = issues.length < total;
 
 	switch (fmt.mode) {
 		case "json": {
@@ -141,6 +158,8 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				command: "list",
 				issues: issuesWithPlan,
 				count: issues.length,
+				total,
+				truncated,
 			});
 			return;
 		}
@@ -149,6 +168,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			return;
 		case "compact":
 			for (const issue of issues) console.log(formatIssueOneLineCompact(issue, closedBlockerIds));
+			if (truncated) process.stderr.write(`${countFooter(issues.length, total)}\n`);
 			return;
 		case "plain":
 			if (issues.length === 0) {
@@ -159,7 +179,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				const plan = planForIssue(planCtx, issue);
 				console.log(stripAnsi(formatIssueOneLine(issue, closedBlockerIds) + planLineSuffix(plan)));
 			}
-			console.log(`\n${issues.length} issue(s)`);
+			console.log(`\n${countFooter(issues.length, total)}`);
 			return;
 		default:
 			if (issues.length === 0) {
@@ -171,7 +191,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				const suffix = planLineSuffix(plan);
 				printIssueOneLine(issue, closedBlockerIds, suffix);
 			}
-			console.log(`\n${issues.length} issue(s)`);
+			console.log(`\n${countFooter(issues.length, total)}`);
 			return;
 	}
 }
@@ -189,7 +209,10 @@ export function register(program: Command): void {
 		.option("--unlabeled", "Filter: issues with no labels")
 		.option("--priority <levels>", "Filter by priority (comma-separated, e.g. 0,1 or P0,P1)")
 		.option("--priority-max <n>", "Filter to priority <= n (e.g. --priority-max 1 = P0+P1)")
-		.option("--limit <n>", "Max issues to show", "50")
+		.option(
+			"--limit <n>",
+			`Max issues to show; 0 = no limit (default: ${DEFAULT_HUMAN_LIMIT}; json/ids: no limit)`,
+		)
 		.option("--sort <mode>", "Sort order (priority|created|updated|id)", "priority")
 		.option("--format <mode>", `Output format (${VALID_FORMATS.join("|")})`)
 		.option("--json", "Output as JSON (alias for --format json)")

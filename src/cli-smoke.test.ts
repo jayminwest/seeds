@@ -267,8 +267,8 @@ describe("sd CLI smoke", () => {
 
 			// `cat` keeps the read end open and drains everything; the payload is
 			// piped through to a byte count so we can assert the full output made
-			// it across without truncation. --limit overrides the default 50-issue
-			// cap so the payload genuinely clears the pipe buffer.
+			// it across without truncation. --limit 1000 is explicit for clarity;
+			// --json is uncapped by default.
 			const proc = Bun.spawn(
 				["bash", "-c", `bun run ${JSON.stringify(CLI)} list --json --limit 1000 | cat | wc -c`],
 				{ cwd, stdout: "pipe", stderr: "ignore", env: { ...process.env, NO_COLOR: "1" } },
