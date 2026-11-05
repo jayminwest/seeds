@@ -44,10 +44,11 @@ describe("sd prime", () => {
 	test("outputs JSON with --json", async () => {
 		const { stdout, exitCode } = await run(["prime", "--json"], tmpDir);
 		expect(exitCode).toBe(0);
-		const result = JSON.parse(stdout) as { success: boolean; command: string; content: string };
+		const result = JSON.parse(stdout) as { success: boolean; command: string; content?: string };
 		expect(result.success).toBe(true);
 		expect(result.command).toBe("prime");
-		expect(result.content).toContain("Seeds Workflow Context");
+		// content would duplicate sections; it is emitted only for a custom PRIME.md.
+		expect(result.content).toBeUndefined();
 	});
 
 	test("--export outputs default template even with custom PRIME.md", async () => {
@@ -72,15 +73,23 @@ describe("sd prime", () => {
 		expect(stdout).toContain("Finding Work");
 		expect(stdout).toContain("Creating & Updating");
 		expect(stdout).toContain("Dependencies & Blocking");
-		expect(stdout).toContain("Common Workflows");
+	});
+
+	test("full and compact mention --json; full drops workflows and context-recovery blurb", async () => {
+		const full = await run(["prime"], tmpDir);
+		expect(full.stdout).toContain("--json");
+		expect(full.stdout).not.toContain("Common Workflows");
+		expect(full.stdout).not.toContain("Context Recovery");
+		const compact = await run(["prime", "--compact"], tmpDir);
+		expect(compact.stdout).toContain("--json");
 	});
 
 	test("--export with --json returns JSON", async () => {
 		const { stdout, exitCode } = await run(["prime", "--export", "--json"], tmpDir);
 		expect(exitCode).toBe(0);
-		const result = JSON.parse(stdout) as { success: boolean; content: string };
+		const result = JSON.parse(stdout) as { success: boolean; sections: { title: string } };
 		expect(result.success).toBe(true);
-		expect(result.content).toContain("Seeds Workflow Context");
+		expect(result.sections.title).toBe("Seeds Workflow Context");
 	});
 
 	test("full content includes plan-aware workflow hints (Phase 5)", async () => {
@@ -101,7 +110,7 @@ describe("sd prime", () => {
 		const result = JSON.parse(stdout) as {
 			success: boolean;
 			command: string;
-			content: string;
+			content?: string;
 			sections: {
 				mode: string;
 				title: string;
@@ -112,7 +121,8 @@ describe("sd prime", () => {
 					commands: Array<{ command: string; description: string }>;
 					notes?: string[];
 				}>;
-				workflows: Array<{ name: string; commands: string[] }>;
+				workflows?: unknown;
+				contextRecovery?: unknown;
 			};
 		};
 		expect(result.success).toBe(true);
@@ -145,16 +155,13 @@ describe("sd prime", () => {
 		const planning = result.sections.commandGroups.find((g) => g.name === "Planning");
 		expect(planning?.notes?.[0]).toContain("sd plan");
 
-		// Workflows expose name + shell commands.
-		const wfNames = result.sections.workflows.map((w) => w.name);
-		expect(wfNames).toContain("Starting work");
-		expect(wfNames).toContain("Completing work");
-		const starting = result.sections.workflows.find((w) => w.name === "Starting work");
-		expect(starting?.commands[0]).toContain("sd ready");
+		// Rules tell agents about --json.
+		expect(result.sections.rules.some((r) => r.includes("--json"))).toBe(true);
 
-		// Backward compat: content still present and matches markdown.
-		expect(result.content).toContain("Seeds Workflow Context");
-		expect(result.content).toContain("Finding Work");
+		// Dropped: workflows repeated the command groups; contextRecovery was noise.
+		expect(result.sections.workflows).toBeUndefined();
+		expect(result.sections.contextRecovery).toBeUndefined();
+		expect(result.content).toBeUndefined();
 	});
 
 	test("--json --compact emits compact-mode sections", async () => {
@@ -168,7 +175,7 @@ describe("sd prime", () => {
 				planningNote: string;
 				closingNote: string;
 			};
-			content: string;
+			content?: string;
 		};
 		expect(result.sections.mode).toBe("compact");
 		expect(result.sections.title).toBe("Seeds Quick Reference");
@@ -176,7 +183,7 @@ describe("sd prime", () => {
 		expect(result.sections.commands.some((c) => c.command === "sd ready")).toBe(true);
 		expect(result.sections.planningNote).toContain("sd plan");
 		expect(result.sections.closingNote).toContain("sd sync");
-		expect(result.content).toContain("Seeds Quick Reference");
+		expect(result.content).toBeUndefined();
 	});
 
 	test("--json with custom PRIME.md sets sections to null", async () => {
@@ -201,12 +208,11 @@ describe("sd prime", () => {
 		expect(exitCode).toBe(0);
 		const result = JSON.parse(stdout) as {
 			sections: { mode: string } | null;
-			content: string;
+			content?: string;
 		};
 		expect(result.sections).not.toBeNull();
 		expect(result.sections?.mode).toBe("full");
-		expect(result.content).toContain("Seeds Workflow Context");
-		expect(result.content).not.toContain("custom prime content");
+		expect(result.content).toBeUndefined();
 	});
 
 	test("appends live state: in-progress issues and top ready", async () => {
@@ -232,12 +238,10 @@ describe("sd prime", () => {
 		const { stdout } = await run(["prime", "--json"], tmpDir);
 		const result = JSON.parse(stdout) as {
 			state: { inProgress: unknown[]; ready: Array<{ title: string }>; readyCount: number };
-			content: string;
 		};
 		expect(result.state.inProgress).toHaveLength(0);
 		expect(result.state.readyCount).toBe(1);
 		expect(result.state.ready[0]?.title).toBe("One");
-		expect(result.content).not.toContain("Current State");
 	});
 
 	test("empty project reports no ready work; no project omits state", async () => {

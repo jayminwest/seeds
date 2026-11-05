@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
 	formatIssueOneLine,
 	formatIssueOneLineCompact,
+	noColorRequested,
 	plain,
 	printWarning,
 	setQuiet,
@@ -17,6 +18,21 @@ const baseIssue = (overrides: Partial<Issue> = {}): Issue => ({
 	createdAt: "2026-05-06T00:00:00.000Z",
 	updatedAt: "2026-05-06T00:00:00.000Z",
 	...overrides,
+});
+
+describe("noColorRequested", () => {
+	test("non-empty NO_COLOR disables color", () => {
+		expect(noColorRequested({ NO_COLOR: "1" })).toBe(true);
+	});
+
+	test("unset or empty NO_COLOR leaves color alone", () => {
+		expect(noColorRequested({})).toBe(false);
+		expect(noColorRequested({ NO_COLOR: "" })).toBe(false);
+	});
+
+	test("explicit FORCE_COLOR wins over NO_COLOR", () => {
+		expect(noColorRequested({ NO_COLOR: "1", FORCE_COLOR: "1" })).toBe(false);
+	});
 });
 
 describe("formatIssueOneLine", () => {

@@ -3,6 +3,15 @@ import { stripAnsi } from "./format.ts";
 import type { Issue } from "./types.ts";
 import { PRIORITY_LABELS } from "./types.ts";
 
+// chalk 5's bundled supports-color ignores NO_COLOR, so a TTY (tmux,
+// overstory PTYs) still got truecolor escapes. Honor https://no-color.org:
+// a non-empty NO_COLOR disables color unless FORCE_COLOR explicitly asks for it.
+export function noColorRequested(env: NodeJS.ProcessEnv = process.env): boolean {
+	return Boolean(env.NO_COLOR) && !("FORCE_COLOR" in env);
+}
+
+if (noColorRequested()) chalk.level = 0;
+
 // Forest palette
 export const brand = chalk.rgb(124, 179, 66);
 export const accent = chalk.rgb(255, 183, 77);

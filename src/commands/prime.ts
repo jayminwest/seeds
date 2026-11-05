@@ -23,15 +23,9 @@ export interface PrimeCommandGroup {
 	notes?: string[];
 }
 
-export interface PrimeWorkflow {
-	name: string;
-	commands: string[];
-}
-
 export interface PrimeSectionsFull {
 	mode: "full";
 	title: string;
-	contextRecovery: string;
 	closeProtocol: {
 		warning: string;
 		steps: string[];
@@ -39,7 +33,6 @@ export interface PrimeSectionsFull {
 	};
 	rules: string[];
 	commandGroups: PrimeCommandGroup[];
-	workflows: PrimeWorkflow[];
 }
 
 export interface PrimeSectionsCompact {
@@ -74,7 +67,6 @@ function buildFull(gates: string | null): PrimeSectionsFull {
 	return {
 		mode: "full",
 		title: "Seeds Workflow Context",
-		contextRecovery: "Run `sd prime` after compaction, clear, or new session",
 		closeProtocol: {
 			warning: 'Before saying "done", run this checklist:',
 			steps: [
@@ -89,6 +81,7 @@ function buildFull(gates: string | null): PrimeSectionsFull {
 			"**Track durable work in seeds** (`sd create`, `sd ready`, `sd close`), not markdown task files. In-session checklists (TodoWrite) are fine.",
 			"**Claim before starting**: `sd update <id> --claim` (atomic; fails if someone else has it)",
 			"**Never hand-edit `.seeds/*.jsonl`**: `sd` commands lock, validate, and dedup; hand edits skip all three",
+			"**Parse with `--json`**: every `sd` command emits structured JSON on stdout with `--json`",
 		],
 		commandGroups: [
 			{
@@ -157,23 +150,6 @@ function buildFull(gates: string | null): PrimeSectionsFull {
 				],
 			},
 		],
-		workflows: [
-			{
-				name: "Starting work",
-				commands: [
-					"sd ready                    # Find available work",
-					"sd show <id>                # Review issue details",
-					"sd update <id> --claim      # Claim it",
-				],
-			},
-			{
-				name: "Completing work",
-				commands: [
-					"sd close <id1> <id2> ...    # Close all completed issues at once",
-					"sd sync                     # Stage + commit .seeds/",
-				],
-			},
-		],
 	};
 }
 
@@ -193,6 +169,7 @@ function buildCompact(gates: string | null): PrimeSectionsCompact {
 			{ command: "sd dep add <a> <b>", description: "a depends on b" },
 			{ command: "sd plan prompt <seed>", description: "Plan large/ambiguous work" },
 			{ command: "sd sync", description: "Stage + commit .seeds/" },
+			{ command: "sd <cmd> --json", description: "Structured output (every command)" },
 		],
 		planningNote:
 			"**Planning:** Use `sd plan` for ambiguous or large work — built-in templates: `feature`, `bug`, `refactor`.",
@@ -284,8 +261,6 @@ function renderFull(s: PrimeSectionsFull): string {
 	const lines: string[] = [];
 	lines.push(`# ${s.title}`);
 	lines.push("");
-	lines.push(`> **Context Recovery**: ${s.contextRecovery}`);
-	lines.push("");
 
 	lines.push("# Session Close Protocol");
 	lines.push("");
@@ -319,18 +294,6 @@ function renderFull(s: PrimeSectionsFull): string {
 		for (const cmd of group.commands) {
 			lines.push(`- \`${cmd.command}\` — ${cmd.description}`);
 		}
-		lines.push("");
-	}
-
-	lines.push("## Common Workflows");
-	lines.push("");
-	for (const wf of s.workflows) {
-		lines.push(`**${wf.name}:**`);
-		lines.push("```bash");
-		for (const c of wf.commands) {
-			lines.push(c);
-		}
-		lines.push("```");
 		lines.push("");
 	}
 
@@ -417,11 +380,10 @@ export async function run(args: string[]): Promise<void> {
 
 	// --export always outputs the default template, without live state.
 	if (exportMode) {
-		const content = renderPrimeSections(defaults);
 		if (jsonMode) {
-			await outputJson({ success: true, command: "prime", sections: defaults, content });
+			await outputJson({ success: true, command: "prime", sections: defaults });
 		} else {
-			process.stdout.write(content);
+			process.stdout.write(renderPrimeSections(defaults));
 		}
 		return;
 	}
@@ -429,7 +391,10 @@ export async function run(args: string[]): Promise<void> {
 	const { sections, content } = await primeContent(seedsDir, defaults);
 	const state = await loadStateSafe(seedsDir);
 	if (jsonMode) {
-		await outputJson({ success: true, command: "prime", sections, state, content });
+		// The markdown is a rendering of `sections`; emit it only for a custom
+		// PRIME.md, where sections is null and content is all there is.
+		const body = sections ? { sections } : { sections, content };
+		await outputJson({ success: true, command: "prime", ...body, state });
 	} else {
 		process.stdout.write(withState(content, state));
 	}
