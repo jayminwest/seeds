@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { findSeedsDir, loadPlanTemplates, readConfig } from "../config.ts";
 import { assertNoCycles, planEdges } from "../dep-graph.ts";
 import { generateId } from "../id.ts";
+import { indexById, mapById } from "../id-index.ts";
 import { accent, brand, muted, outputFailure, outputJson, printSuccess } from "../output.ts";
 import { applyPlanBackref, buildPlanBackref, stripPlanBackref } from "../plan-backref.ts";
 import { inferDomain } from "../plan-domain.ts";
@@ -973,6 +974,7 @@ interface AdoptionValidationArgs {
 function validateAdoptions(args: AdoptionValidationArgs): Map<number, AdoptionEntry> {
 	const { steps, seedId, allIssues, allowedCurrentPlanId } = args;
 	const out = new Map<number, AdoptionEntry>();
+	const issueIdx = indexById(allIssues);
 	const seen = new Set<string>();
 	for (let i = 0; i < steps.length; i++) {
 		const step = steps[i];
@@ -994,7 +996,7 @@ function validateAdoptions(args: AdoptionValidationArgs): Map<number, AdoptionEn
 				`${label}: existing_seed ${adoptId} is already adopted by an earlier step in this plan.`,
 			);
 		}
-		const idx = allIssues.findIndex((iss) => iss.id === adoptId);
+		const idx = issueIdx.get(adoptId) ?? -1;
 		const seed = allIssues[idx];
 		if (!seed) {
 			throw new Error(`${label}: existing_seed ${adoptId} not found.`);
@@ -1084,9 +1086,10 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 	//   2. step.title against unmatched current plan-children (legacy path).
 	//   3. Spawn a fresh child.
 	// (PLAN_SPEC.md:387-388)
+	const issueIdx = indexById(allIssues); // rows are replaced in place; push comes last
 	const oldChildIssues: Issue[] = [];
 	for (const cid of existingPlan.children) {
-		const c = allIssues.find((i) => i.id === cid);
+		const c = allIssues[issueIdx.get(cid) ?? -1];
 		if (c) oldChildIssues.push(c);
 	}
 	const oldChildIdSet = new Set(oldChildIssues.map((c) => c.id));
@@ -1136,7 +1139,7 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 		if (!childId) continue;
 		const external = adoptedExternalIds.has(childId);
 		if (external || usedOldIds.has(childId)) {
-			const matchedIdx = allIssues.findIndex((iss) => iss.id === childId);
+			const matchedIdx = issueIdx.get(childId) ?? -1;
 			const matched = allIssues[matchedIdx];
 			if (matched) {
 				// seeds-bac9 — additively merge step.labels into the matched or
@@ -1222,7 +1225,7 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 		field: "blocks" | "blockedBy",
 		valueId: string,
 	): boolean => {
-		const idx = allIssues.findIndex((iss) => iss.id === targetId);
+		const idx = issueIdx.get(targetId) ?? -1;
 		if (idx < 0) return false;
 		const matched = allIssues[idx];
 		if (!matched) return false;
@@ -1270,7 +1273,7 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 	// seeds-fb42 — obsolete children no longer map to any step; clear their
 	// stale plan_step_index so it can't collide with the step that now owns it.
 	for (const o of obsolete) {
-		const idx = allIssues.findIndex((iss) => iss.id === o.id);
+		const idx = issueIdx.get(o.id) ?? -1;
 		const row = allIssues[idx];
 		if (!row || row.plan_step_index === undefined) continue;
 		allIssues[idx] = { ...row, plan_step_index: undefined, updatedAt: now };
@@ -1436,9 +1439,9 @@ async function runOutcome(
 			if (!plan) {
 				throw new Error(`Plan not found: ${planId}. Run 'sd plan list' to see available plans.`);
 			}
-			const issues = await readIssues(dir);
+			const issues = mapById(await readIssues(dir));
 			openChildren = plan.children.filter((cid) => {
-				const issue = issues.find((i) => i.id === cid);
+				const issue = issues.get(cid);
 				return issue && issue.status !== "closed";
 			}).length;
 			const next: Plan = {
@@ -1721,11 +1724,12 @@ async function runAdopt(planIdArg: string, seedIds: string[], opts: AdoptOptions
 				idx: number;
 			}
 			const resolved: Resolved[] = [];
+			const issueIdx = indexById(allIssues);
 			for (const seedId of seedIds) {
 				if (seedId === plan.seed) {
 					throw new Error(`cannot adopt the parent seed ${seedId} into its own plan ${planId}.`);
 				}
-				const idx = allIssues.findIndex((i) => i.id === seedId);
+				const idx = issueIdx.get(seedId) ?? -1;
 				const seed = allIssues[idx];
 				if (!seed) {
 					throw new Error(`seed ${seedId} not found.`);
@@ -1910,11 +1914,12 @@ async function runRelease(
 				idx: number;
 			}
 			const resolved: Resolved[] = [];
+			const issueIdx = indexById(allIssues);
 			for (const seedId of seedIds) {
 				if (seedId === plan.seed) {
 					throw new Error(`cannot release the parent seed ${seedId} from its own plan ${planId}.`);
 				}
-				const idx = allIssues.findIndex((i) => i.id === seedId);
+				const idx = issueIdx.get(seedId) ?? -1;
 				const seed = allIssues[idx];
 				if (!seed) {
 					throw new Error(`seed ${seedId} not found.`);
@@ -2356,8 +2361,9 @@ async function runEdit(idArg: string, opts: EditOptions): Promise<void> {
 				const approach = (next.sections as { approach?: unknown }).approach;
 				let dirty = false;
 				if (approachChanged && parent) {
+					const issueIdx = indexById(allIssues);
 					for (const childId of next.children) {
-						const cIdx = allIssues.findIndex((iss) => iss.id === childId);
+						const cIdx = issueIdx.get(childId) ?? -1;
 						const child = allIssues[cIdx];
 						if (!child) continue;
 						const stepIndex = child.plan_step_index;

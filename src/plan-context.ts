@@ -2,6 +2,7 @@
 // (PLAN_SPEC.md:154-156). Each consumer reads plans + issues once and uses
 // these helpers to look up plan state and render hints/summaries.
 
+import { mapById } from "./id-index.ts";
 import { accent, muted } from "./output.ts";
 import { readPlans } from "./store.ts";
 import type { Issue, Plan } from "./types.ts";
@@ -69,8 +70,9 @@ export function issueJsonWithPlan(
 
 export function summarisePlanChildren(plan: Plan, issues: Issue[]): ChildSummary[] {
 	const adoptedSet = new Set(plan.adoptedChildren ?? []);
+	const byId = mapById(issues);
 	return plan.children.map((id) => {
-		const issue = issues.find((i) => i.id === id);
+		const issue = byId.get(id);
 		return {
 			id,
 			title: issue?.title ?? "(missing)",

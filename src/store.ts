@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
 import {
 	closeSync,
+	fstatSync,
 	openSync,
 	readFileSync,
+	readSync,
 	renameSync,
 	statSync,
 	unlinkSync,
@@ -298,22 +300,34 @@ export async function writeIssues(seedsDir: string, issues: Issue[]): Promise<vo
 }
 
 /**
+ * Append one row with O_APPEND (seeds-b79d): cost is O(row), not O(file), and
+ * the existing bytes (malformed and quarantined rows included) are never
+ * touched. Only the last byte is read, to terminate a line left without a
+ * trailing newline. Caller holds the file's lock.
+ */
+function appendJsonlRow(filePath: string, row: unknown): void {
+	const line = `${JSON.stringify(row)}\n`;
+	const fd = openSync(filePath, "a+");
+	try {
+		const { size } = fstatSync(fd);
+		const last = Buffer.alloc(1);
+		const needsNewline = size > 0 && readSync(fd, last, 0, 1, size - 1) === 1 && last[0] !== 0x0a;
+		writeSync(fd, needsNewline ? `\n${line}` : line);
+	} finally {
+		closeSync(fd);
+	}
+}
+
+/**
  * Append a single issue to `.seeds/issues.jsonl`.
  *
  * Caller must hold `withLock(issuesPath(seedsDir), …)` for the duration of this
  * call — this helper does NOT acquire the file lock itself. Concurrent writes
- * without the lock can lose data (read/append/rename is not atomic across
- * processes on its own).
+ * without the lock can interleave with a rewrite and lose data.
  */
 export async function appendIssue(seedsDir: string, issue: Issue): Promise<void> {
 	assertValidIssues([issue]);
-	const filePath = join(seedsDir, ISSUES_FILE);
-	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const file = Bun.file(filePath);
-	const existing = (await file.exists()) ? await file.text() : "";
-	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
-	await Bun.write(tmpPath, `${prefix}${JSON.stringify(issue)}\n`);
-	renameSync(tmpPath, filePath);
+	appendJsonlRow(join(seedsDir, ISSUES_FILE), issue);
 }
 
 export async function readTemplates(seedsDir: string): Promise<Template[]> {
@@ -345,13 +359,7 @@ export async function writeTemplates(seedsDir: string, templates: Template[]): P
  * writes without the lock can lose data.
  */
 export async function appendTemplate(seedsDir: string, template: Template): Promise<void> {
-	const filePath = join(seedsDir, TEMPLATES_FILE);
-	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const file = Bun.file(filePath);
-	const existing = (await file.exists()) ? await file.text() : "";
-	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
-	await Bun.write(tmpPath, `${prefix}${JSON.stringify(template)}\n`);
-	renameSync(tmpPath, filePath);
+	appendJsonlRow(join(seedsDir, TEMPLATES_FILE), template);
 }
 
 export function issuesPath(seedsDir: string): string {
@@ -394,11 +402,5 @@ export async function writePlans(seedsDir: string, plans: Plan[]): Promise<void>
  * without the lock can lose data.
  */
 export async function appendPlan(seedsDir: string, plan: Plan): Promise<void> {
-	const filePath = join(seedsDir, PLANS_FILE);
-	const tmpPath = `${filePath}.tmp.${randomBytes(4).toString("hex")}`;
-	const file = Bun.file(filePath);
-	const existing = (await file.exists()) ? await file.text() : "";
-	const prefix = existing === "" || existing.endsWith("\n") ? existing : `${existing}\n`;
-	await Bun.write(tmpPath, `${prefix}${JSON.stringify(plan)}\n`);
-	renameSync(tmpPath, filePath);
+	appendJsonlRow(join(seedsDir, PLANS_FILE), plan);
 }

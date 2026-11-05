@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
 import { assertNoCycles } from "../dep-graph.ts";
+import { mapById } from "../id-index.ts";
 import { accent, muted, outputJson, printIssueOneLine } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -24,6 +25,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		const blockedBy = issue.blockedBy ?? [];
 		const blocks = issue.blocks ?? [];
 		const closedBlockerIds = new Set(issues.filter((i) => i.status === "closed").map((i) => i.id));
+		const byId = mapById(issues);
 
 		if (jsonMode) {
 			await outputJson({ success: true, command: "dep list", issueId, blockedBy, blocks });
@@ -32,7 +34,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (blockedBy.length > 0) {
 				console.log(muted("  Blocked by:"));
 				for (const bid of blockedBy) {
-					const b = issues.find((i) => i.id === bid);
+					const b = byId.get(bid);
 					if (b) {
 						process.stdout.write("    ");
 						printIssueOneLine(b, closedBlockerIds);
@@ -44,7 +46,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			if (blocks.length > 0) {
 				console.log(muted("  Blocks:"));
 				for (const bid of blocks) {
-					const b = issues.find((i) => i.id === bid);
+					const b = byId.get(bid);
 					if (b) {
 						process.stdout.write("    ");
 						printIssueOneLine(b, closedBlockerIds);

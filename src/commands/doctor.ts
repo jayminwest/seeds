@@ -1,22 +1,22 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
 import {
 	inspectLocks,
 	JSONL_FILES,
-	readRawLines,
+	readSnapshot,
 	removeStaleLocks,
 	rewriteJsonl,
 	rowsWithId,
+	type StoreSnapshot,
 	serializeLines,
 } from "../doctor-store.ts";
 import { dedupKey, findIdCollisions } from "../id-collisions.ts";
-import { rowLabel, validateIssue } from "../issue-schema.ts";
+import { rowLabel } from "../issue-schema.ts";
 import { ensureMergeStrategy, inspectMergeStrategy } from "../merge-strategy.ts";
 import { brand, muted, outputJson } from "../output.ts";
-import { readIssues, readPlans } from "../store.ts";
+import { readPlans } from "../store.ts";
 import type { Issue, Plan } from "../types.ts";
 import { ISSUES_FILE } from "../types.ts";
 
@@ -65,11 +65,10 @@ function checkConfig(seedsDir: string, config: { project: string } | null): Doct
 	};
 }
 
-function checkJsonlIntegrity(seedsDir: string): DoctorCheck {
+function checkJsonlIntegrity(snap: StoreSnapshot): DoctorCheck {
 	const details: string[] = [];
 	for (const file of JSONL_FILES) {
-		const lines = readRawLines(join(seedsDir, file));
-		for (const line of lines) {
+		for (const line of snap.lines[file]) {
 			if (line.error) {
 				details.push(`${file} line ${String(line.lineNumber)}: ${line.error}`);
 			}
@@ -93,13 +92,12 @@ function checkJsonlIntegrity(seedsDir: string): DoctorCheck {
 	};
 }
 
-function checkSchemaValidation(seedsDir: string): DoctorCheck {
+function checkSchemaValidation(snap: StoreSnapshot): DoctorCheck {
 	const details: string[] = [];
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	for (const line of lines) {
-		if (line.error !== undefined) continue; // jsonl-integrity reports these
+	// Malformed lines never reach `invalid`; jsonl-integrity reports those.
+	for (const { line, problems } of snap.invalid) {
 		const id = rowLabel(line.parsed, `line ${String(line.lineNumber)}`);
-		for (const problem of validateIssue(line.parsed)) details.push(`${id}: ${problem}`);
+		for (const problem of problems) details.push(`${id}: ${problem}`);
 	}
 	if (details.length > 0) {
 		return {
@@ -119,11 +117,11 @@ function checkSchemaValidation(seedsDir: string): DoctorCheck {
 	};
 }
 
-function checkDuplicateIds(seedsDir: string): DoctorCheck {
+function checkDuplicateIds(snap: StoreSnapshot): DoctorCheck {
 	const details: string[] = [];
 	let collided = 0;
 	for (const file of JSONL_FILES) {
-		const lines = readRawLines(join(seedsDir, file));
+		const lines = snap.lines[file];
 		const collisions = findIdCollisions(lines.map((l) => l.parsed));
 		collided += collisions.size;
 		const counts = new Map<string, number>();
@@ -297,7 +295,9 @@ function checkCircularDependencies(issues: Issue[]): DoctorCheck {
 	const inStack = new Set<string>();
 	const cycles: string[][] = [];
 
-	function dfs(node: string, path: string[]): void {
+	// One shared path stack (push/pop) instead of a copy per edge: O(V+E), not O(depth²).
+	const path: string[] = [];
+	function dfs(node: string): void {
 		if (inStack.has(node)) {
 			const cycleStart = path.indexOf(node);
 			if (cycleStart >= 0) {
@@ -308,14 +308,16 @@ function checkCircularDependencies(issues: Issue[]): DoctorCheck {
 		if (visited.has(node)) return;
 		visited.add(node);
 		inStack.add(node);
+		path.push(node);
 		for (const dep of graph.get(node) ?? []) {
-			dfs(dep, [...path, node]);
+			dfs(dep);
 		}
+		path.pop();
 		inStack.delete(node);
 	}
 
 	for (const id of graph.keys()) {
-		dfs(id, []);
+		dfs(id);
 	}
 
 	if (cycles.length > 0) {
@@ -337,10 +339,9 @@ function checkCircularDependencies(issues: Issue[]): DoctorCheck {
 	};
 }
 
-function checkLabelSchema(seedsDir: string): DoctorCheck {
+function checkLabelSchema(snap: StoreSnapshot): DoctorCheck {
 	const details: string[] = [];
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	for (const line of lines) {
+	for (const line of snap.lines[ISSUES_FILE]) {
 		if (!line.parsed) continue;
 		const issue = line.parsed as Record<string, unknown>;
 		const id = typeof issue.id === "string" ? issue.id : `line ${String(line.lineNumber)}`;
@@ -376,10 +377,9 @@ function checkLabelSchema(seedsDir: string): DoctorCheck {
 	};
 }
 
-function checkExtensionsSchema(seedsDir: string): DoctorCheck {
+function checkExtensionsSchema(snap: StoreSnapshot): DoctorCheck {
 	const details: string[] = [];
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	for (const line of lines) {
+	for (const line of snap.lines[ISSUES_FILE]) {
 		if (!line.parsed) continue;
 		const issue = line.parsed as Record<string, unknown>;
 		const id = typeof issue.id === "string" ? issue.id : `line ${String(line.lineNumber)}`;
@@ -407,11 +407,10 @@ function checkExtensionsSchema(seedsDir: string): DoctorCheck {
 	};
 }
 
-function checkClosedFieldsConsistency(seedsDir: string): DoctorCheck {
+function checkClosedFieldsConsistency(snap: StoreSnapshot): DoctorCheck {
 	const failures: string[] = [];
 	const warnings: string[] = [];
-	const lines = readRawLines(join(seedsDir, ISSUES_FILE));
-	for (const line of lines) {
+	for (const line of snap.lines[ISSUES_FILE]) {
 		if (!line.parsed) continue;
 		const issue = line.parsed as Record<string, unknown>;
 		const id = typeof issue.id === "string" ? issue.id : `line ${String(line.lineNumber)}`;
@@ -720,6 +719,25 @@ function printCheck(check: DoctorCheck, verbose: boolean): void {
 	}
 }
 
+/** Every check after config, over one snapshot of the stores (each file read and parsed once). */
+async function runStoreChecks(dir: string): Promise<DoctorCheck[]> {
+	const snap = readSnapshot(dir);
+	return [
+		checkJsonlIntegrity(snap),
+		checkSchemaValidation(snap),
+		checkDuplicateIds(snap),
+		checkReferentialIntegrity(snap.issues),
+		checkBidirectionalConsistency(snap.issues),
+		checkCircularDependencies(snap.issues),
+		checkPlanStepIndex(snap.issues, await readPlans(dir)),
+		checkLabelSchema(snap),
+		checkExtensionsSchema(snap),
+		checkClosedFieldsConsistency(snap),
+		checkStaleLocks(dir),
+		checkGitattributes(dir),
+	];
+}
+
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const fixMode = args.includes("--fix");
@@ -746,21 +764,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		return await reportResults(checks, jsonMode, verbose, fixMode, dir);
 	}
 
-	checks.push(checkJsonlIntegrity(dir));
-	checks.push(checkSchemaValidation(dir));
-	checks.push(checkDuplicateIds(dir));
-
-	// Load deduped issues for dependency checks
-	const issues = await readIssues(dir);
-	checks.push(checkReferentialIntegrity(issues));
-	checks.push(checkBidirectionalConsistency(issues));
-	checks.push(checkCircularDependencies(issues));
-	checks.push(checkPlanStepIndex(issues, await readPlans(dir)));
-	checks.push(checkLabelSchema(dir));
-	checks.push(checkExtensionsSchema(dir));
-	checks.push(checkClosedFieldsConsistency(dir));
-	checks.push(checkStaleLocks(dir));
-	checks.push(checkGitattributes(dir));
+	checks.push(...(await runStoreChecks(dir)));
 
 	// Apply fixes if requested
 	if (fixMode) {
@@ -778,19 +782,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			}
 			reChecks.push(checkConfig(dir, reConfig));
 			if (reChecks[0]?.status !== "fail") {
-				reChecks.push(checkJsonlIntegrity(dir));
-				reChecks.push(checkSchemaValidation(dir));
-				reChecks.push(checkDuplicateIds(dir));
-				const reIssues = await readIssues(dir);
-				reChecks.push(checkReferentialIntegrity(reIssues));
-				reChecks.push(checkBidirectionalConsistency(reIssues));
-				reChecks.push(checkCircularDependencies(reIssues));
-				reChecks.push(checkPlanStepIndex(reIssues, await readPlans(dir)));
-				reChecks.push(checkLabelSchema(dir));
-				reChecks.push(checkExtensionsSchema(dir));
-				reChecks.push(checkClosedFieldsConsistency(dir));
-				reChecks.push(checkStaleLocks(dir));
-				reChecks.push(checkGitattributes(dir));
+				reChecks.push(...(await runStoreChecks(dir)));
 			}
 			return await reportResults(reChecks, jsonMode, verbose, fixMode, dir, fixedItems);
 		}

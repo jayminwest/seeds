@@ -8,7 +8,9 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { validateIssue } from "./issue-schema.ts";
 import { isLockStale, reclaimStaleLock, withLock } from "./store.ts";
+import type { Issue } from "./types.ts";
 import { CONFIG_FILE, ISSUES_FILE, PLANS_FILE, TEMPLATES_FILE } from "./types.ts";
 
 // Store access for `sd doctor` (seeds-499f): raw line reads for the checks, and
@@ -43,6 +45,40 @@ export function readRawLines(filePath: string): RawLine[] {
 		}
 	}
 	return lines;
+}
+
+/**
+ * One read of every JSONL store, shared by all doctor checks (seeds-b79d: the
+ * checks used to re-read and re-parse issues.jsonl once each). `issues` is what
+ * readIssues() returns — valid rows, last occurrence wins — and `invalid`
+ * holds the schema problems of every parsed row readIssues() would quarantine.
+ */
+export interface StoreSnapshot {
+	lines: Record<(typeof JSONL_FILES)[number], RawLine[]>;
+	issues: Issue[];
+	invalid: { line: RawLine; problems: string[] }[];
+}
+
+export function readSnapshot(seedsDir: string): StoreSnapshot {
+	const [issues, templates, plans] = JSONL_FILES.map((f) => readRawLines(join(seedsDir, f)));
+	const issueLines = issues ?? [];
+	const byId = new Map<string, Issue>();
+	const invalid: StoreSnapshot["invalid"] = [];
+	for (const line of issueLines) {
+		if (line.error !== undefined) continue;
+		const problems = validateIssue(line.parsed);
+		if (problems.length > 0) invalid.push({ line, problems });
+		else byId.set((line.parsed as Issue).id, line.parsed as Issue);
+	}
+	return {
+		lines: {
+			[ISSUES_FILE]: issueLines,
+			[TEMPLATES_FILE]: templates ?? [],
+			[PLANS_FILE]: plans ?? [],
+		},
+		issues: [...byId.values()],
+		invalid,
+	};
 }
 
 /** Re-serialize lines after in-place edits to `parsed`; malformed lines are kept verbatim. */

@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
+import { indexById } from "../id-index.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import {
 	affectedPlanIds,
@@ -42,9 +43,10 @@ export async function runClose(
 		withLock(issuesPath(dir), async () => {
 			const issues = await readIssues(dir);
 			const now = new Date().toISOString();
+			const issueIdx = indexById(issues);
 
 			for (const id of ids) {
-				const idx = issues.findIndex((i) => i.id === id);
+				const idx = issueIdx.get(id) ?? -1;
 				const issue = issues[idx];
 				if (!issue) throw new Error(`Issue not found: ${id}`);
 				if (issue.status === "closed") {

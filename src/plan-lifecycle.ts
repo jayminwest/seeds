@@ -14,6 +14,7 @@
 // All transitions happen under the plans-lock held by the caller (update.ts /
 // close.ts wrap their issue writes in `withLock(plansPath, () => withLock(issuesPath, ...))`).
 
+import { mapById } from "./id-index.ts";
 import { printWarning } from "./output.ts";
 import type { Issue, Plan, PlanStatus } from "./types.ts";
 
@@ -37,13 +38,14 @@ export function applyPlanTransitions(
 	now: string,
 ): number {
 	const targets = new Set(affectedPlanIds);
+	const byId = mapById(allIssues);
 	let changed = 0;
 	for (let i = 0; i < plans.length; i++) {
 		const p = plans[i];
 		if (!p || !targets.has(p.id)) continue;
 		const children: Issue[] = [];
 		for (const cid of p.children) {
-			const c = allIssues.find((iss) => iss.id === cid);
+			const c = byId.get(cid);
 			if (c) children.push(c);
 		}
 		const next = computeNextPlanStatus(p, children);
