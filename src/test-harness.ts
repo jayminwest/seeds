@@ -66,6 +66,7 @@ const loaders: Record<string, () => Promise<CommandModule>> = {
 	config: () => import("./commands/config.ts"),
 	plan: () => import("./commands/plan.ts"),
 	setup: () => import("./commands/setup.ts"),
+	"merge-driver": () => import("./commands/merge-driver.ts"),
 };
 
 function formatConsoleArgs(parts: unknown[]): string {

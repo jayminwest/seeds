@@ -69,36 +69,61 @@ describe("sd init", () => {
 		expect(data.exitCode).toBe(1);
 	});
 
-	test("appends gitattributes to project root", async () => {
+	test("routes every store to the seeds-jsonl merge driver, never merge=union", async () => {
 		await run(["init"], tmpDir);
 		const gitattributes = await Bun.file(join(tmpDir, ".gitattributes")).text();
-		expect(gitattributes).toContain(".seeds/issues.jsonl merge=union");
-		expect(gitattributes).toContain(".seeds/templates.jsonl merge=union");
+		expect(gitattributes).toBe(
+			".seeds/issues.jsonl merge=seeds-jsonl\n" +
+				".seeds/templates.jsonl merge=seeds-jsonl\n" +
+				".seeds/plans.jsonl merge=seeds-jsonl\n",
+		);
+		expect(gitattributes).not.toContain("merge=union");
 	});
 
-	test("appends plans.jsonl merge=union line", async () => {
+	test("registers the merge driver in git config inside a git repo", async () => {
+		Bun.spawnSync(["git", "init", "-q"], { cwd: tmpDir });
 		await run(["init"], tmpDir);
-		const gitattributes = await Bun.file(join(tmpDir, ".gitattributes")).text();
-		expect(gitattributes).toContain(".seeds/plans.jsonl merge=union");
+		const cfg = Bun.spawnSync(["git", "config", "--get", "merge.seeds-jsonl.driver"], {
+			cwd: tmpDir,
+		});
+		expect(cfg.stdout.toString().trim()).toBe("sd merge-driver %O %A %B %P");
+		const attr = Bun.spawnSync(["git", "check-attr", "merge", "--", ".seeds/issues.jsonl"], {
+			cwd: tmpDir,
+		});
+		expect(attr.stdout.toString().trim()).toBe(".seeds/issues.jsonl: merge: seeds-jsonl");
 	});
 
-	test("re-run backfills missing merge=union lines per-file", async () => {
+	test("re-run migrates legacy merge=union lines and keeps unrelated lines", async () => {
 		await run(["init"], tmpDir);
-		// Simulate a .gitattributes that lost the templates + plans lines
-		// (e.g. created by an older seeds version, or hand-edited).
-		await writeFile(join(tmpDir, ".gitattributes"), ".seeds/issues.jsonl merge=union\n");
+		await writeFile(
+			join(tmpDir, ".gitattributes"),
+			"*.png binary\n.seeds/issues.jsonl merge=union\n.seeds/templates.jsonl merge=union\n",
+		);
 		const { exitCode } = await run(["init"], tmpDir);
 		expect(exitCode).toBe(0);
 		const gitattributes = await Bun.file(join(tmpDir, ".gitattributes")).text();
-		expect(gitattributes).toContain(".seeds/issues.jsonl merge=union");
-		expect(gitattributes).toContain(".seeds/templates.jsonl merge=union");
-		expect(gitattributes).toContain(".seeds/plans.jsonl merge=union");
-		// Each line appears exactly once — no duplication of the already-present line.
-		const occurrences = gitattributes.match(/\.seeds\/issues\.jsonl merge=union/g);
-		expect(occurrences?.length).toBe(1);
+		expect(gitattributes).not.toContain("merge=union");
+		expect(gitattributes).toContain("*.png binary\n");
+		for (const f of ["issues", "templates", "plans"]) {
+			expect(gitattributes.match(new RegExp(`\\.seeds/${f}\\.jsonl merge=`, "g"))?.length).toBe(1);
+		}
 	});
 
-	test("re-run is a no-op when all merge=union lines already present", async () => {
+	test("re-run leaves a store routed to a custom driver alone", async () => {
+		Bun.spawnSync(["git", "init", "-q"], { cwd: tmpDir });
+		Bun.spawnSync(["git", "config", "merge.mine.driver", "true"], { cwd: tmpDir });
+		await run(["init"], tmpDir);
+		const custom = ".seeds/issues.jsonl merge=mine\n";
+		const path = join(tmpDir, ".gitattributes");
+		await writeFile(path, `${await Bun.file(path).text()}${custom}`);
+		const before = await Bun.file(path).text();
+		await run(["init"], tmpDir);
+		const after = await Bun.file(path).text();
+		expect(after).toBe(before);
+		expect(after.endsWith(custom)).toBe(true);
+	});
+
+	test("re-run is a no-op when the merge strategy is already configured", async () => {
 		await run(["init"], tmpDir);
 		const before = await Bun.file(join(tmpDir, ".gitattributes")).text();
 		await run(["init"], tmpDir);

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `sd list` no longer truncates silently. `--json` and `--format ids` are uncapped by default (consumers treat them as the complete set); human formats still cap at 50 but the footer reads `50 of N issue(s) shown (use --limit 0 for all)` (compact writes it to stderr). `list --json` adds `total` (pre-limit count) and `truncated`. `--limit 0` now means "no limit" for `list`, `ready`, and `search` instead of returning zero rows. (seeds-dd20)
+- `sd init` / `sd doctor` no longer ship `merge=union` for `.seeds/*.jsonl`. Seeds rewrites rows in place, so union merges kept contradictory copies of every row edited on both branches (resurrecting satisfied blockers) and reported a clean merge. Every store now uses the new `sd merge-driver` (`merge=seeds-jsonl`, registered in git config by `sd init` / `sd doctor --fix`): a 3-way merge by row id and field that exits non-zero on genuine conflicts. `sd doctor` validates the strategy git resolves (`git check-attr`) instead of substring-matching, so a custom driver is accepted rather than overridden; legacy union lines are migrated by `sd init` / `sd doctor --fix`. (seeds-6e2d)
 
 ### Removed
 - `src/log.ts` and the `pino` / `pino-pretty` devDependencies. The logger was dead in production (devDependencies never ship, so the lazy import always failed). `SEEDS_DEBUG=1` now prints the top-level error's stack to stderr instead. (seeds-8f00)

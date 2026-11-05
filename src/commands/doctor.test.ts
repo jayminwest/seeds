@@ -606,48 +606,72 @@ describe("doctor: gitattributes check", () => {
 		expect(check?.status).toBe("pass");
 	});
 
-	test("--fix adds missing entries", async () => {
+	test("warns on legacy merge=union and --fix migrates it to the driver", async () => {
 		await run(["init"], tmpDir);
 		const gitattrsPath = join(tmpDir, ".gitattributes");
-		writeFileSync(gitattrsPath, "# empty\n");
-
-		const after = await runJson<DoctorResult>(["doctor", "--fix"], tmpDir);
-		const check = after.checks.find((ch) => ch.name === "gitattributes");
-		expect(check?.status).toBe("pass");
-
-		const content = readFileSync(gitattrsPath, "utf8");
-		expect(content).toContain(".seeds/issues.jsonl merge=union");
-		expect(content).toContain(".seeds/templates.jsonl merge=union");
-		expect(content).toContain(".seeds/plans.jsonl merge=union");
-	});
-
-	test("warns when only the plans.jsonl entry is missing", async () => {
-		await run(["init"], tmpDir);
-		const gitattrsPath = join(tmpDir, ".gitattributes");
-		// Simulate a project whose .gitattributes predates plans support.
 		writeFileSync(
 			gitattrsPath,
-			".seeds/issues.jsonl merge=union\n.seeds/templates.jsonl merge=union\n",
+			"# keep\n.seeds/issues.jsonl merge=union\n.seeds/templates.jsonl merge=union\n",
 		);
 
 		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
 		const check = result.checks.find((ch) => ch.name === "gitattributes");
 		expect(check?.status).toBe("warn");
-		expect(check?.details).toContain("Missing: .seeds/plans.jsonl merge=union");
+		expect(check?.fixable).toBe(true);
+		expect(check?.details.join("\n")).toContain(".seeds/issues.jsonl: merge=union");
+		expect(check?.details.join("\n")).toContain(".seeds/plans.jsonl: no merge strategy");
+
+		const after = await runJson<DoctorResult>(["doctor", "--fix"], tmpDir);
+		expect(after.checks.find((ch) => ch.name === "gitattributes")?.status).toBe("pass");
+		const content = readFileSync(gitattrsPath, "utf8");
+		expect(content).not.toContain("merge=union");
+		expect(content).toBe(
+			"# keep\n.seeds/issues.jsonl merge=seeds-jsonl\n.seeds/templates.jsonl merge=seeds-jsonl\n" +
+				".seeds/plans.jsonl merge=seeds-jsonl\n",
+		);
 	});
 
-	test("--fix backfills a missing plans.jsonl entry", async () => {
+	test("validates the resolved strategy: a custom driver passes and --fix keeps it", async () => {
+		Bun.spawnSync(["git", "init", "-q"], { cwd: tmpDir });
+		Bun.spawnSync(["git", "config", "merge.mine.driver", "true"], { cwd: tmpDir });
 		await run(["init"], tmpDir);
+		const gitattrsPath = join(tmpDir, ".gitattributes");
+		// Last match wins: this overrides init's line, as a downstream workaround would.
+		writeFileSync(gitattrsPath, `${readFileSync(gitattrsPath, "utf8")}.seeds/*.jsonl merge=mine\n`);
+		const before = readFileSync(gitattrsPath, "utf8");
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		expect(result.checks.find((ch) => ch.name === "gitattributes")?.status).toBe("pass");
+		await run(["doctor", "--fix"], tmpDir);
+		expect(readFileSync(gitattrsPath, "utf8")).toBe(before);
+	});
+
+	test("warns on an undefined driver and on an unregistered seeds-jsonl driver", async () => {
+		Bun.spawnSync(["git", "init", "-q"], { cwd: tmpDir });
+		await run(["init"], tmpDir);
+		Bun.spawnSync(["git", "config", "--remove-section", "merge.seeds-jsonl"], { cwd: tmpDir });
 		const gitattrsPath = join(tmpDir, ".gitattributes");
 		writeFileSync(
 			gitattrsPath,
-			".seeds/issues.jsonl merge=union\n.seeds/templates.jsonl merge=union\n",
+			`${readFileSync(gitattrsPath, "utf8")}.seeds/plans.jsonl merge=nope\n`,
+		);
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		const check = result.checks.find((ch) => ch.name === "gitattributes");
+		expect(check?.status).toBe("warn");
+		expect(check?.details).toContain(
+			".seeds/issues.jsonl: merge driver seeds-jsonl is not registered in git config",
+		);
+		expect(check?.details).toContain(
+			".seeds/plans.jsonl: merge driver nope is not defined in git config",
 		);
 
 		const after = await runJson<DoctorResult>(["doctor", "--fix"], tmpDir);
-		const check = after.checks.find((ch) => ch.name === "gitattributes");
-		expect(check?.status).toBe("pass");
-		expect(readFileSync(gitattrsPath, "utf8")).toContain(".seeds/plans.jsonl merge=union");
+		const fixedCheck = after.checks.find((ch) => ch.name === "gitattributes");
+		expect(fixedCheck?.details).toEqual([
+			".seeds/plans.jsonl: merge driver nope is not defined in git config",
+		]);
+		expect(after.fixed).toContain("Registered merge driver seeds-jsonl in git config");
 	});
 });
 

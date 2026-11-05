@@ -15,7 +15,7 @@ pipeline, no separate sync daemon. All issues live in
 `.seeds/issues.jsonl` (one JSON object per line), templates in
 `.seeds/templates.jsonl`, plans in `.seeds/plans.jsonl`, and project
 config in `.seeds/config.yaml`. Files are diffable, mergeable
-(`merge=union` gitattribute + dedup-on-read), and edited only through
+(`sd merge-driver`: 3-way merge by row id, + dedup-on-read), and edited only through
 the `sd` CLI, which holds advisory file locks so parallel agents never
 corrupt the store.
 

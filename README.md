@@ -139,6 +139,7 @@ See [Planning](#planning) below for the end-to-end workflow.
 | `sd onboard` | Add seeds section to CLAUDE.md / AGENTS.md |
 | `sd setup claude` | Install Claude Code hooks: SessionStart `sd prime --compact`, PreToolUse `sd guard` (denies hand edits to `.seeds/*.jsonl`). Idempotent; `--remove` |
 | `sd guard` | PreToolUse hook handler (reads hook JSON on stdin) |
+| `sd merge-driver <O> <A> <B> [path]` | Git merge driver for `.seeds/*.jsonl` (run by git; registered by `sd init`) |
 
 ### Utility
 
@@ -367,7 +368,7 @@ sd update seeds-a1b2 --clear-extensions
 - **Namespace your keys.** Each consumer owns a top-level prefix (`warren_*`, `greenhouse_*`) or a single namespaced sub-object — never bare keys like `role` or `lastRun` at the root of `extensions`. This avoids collisions across tools.
 - **Keep keys flat for partial updates.** `--extensions` shallow-merges (`{...existing, ...incoming}`); a nested `lastRun: {id, at}` patch will overwrite the entire object. If you need partial updates of related fields, use sibling keys (`lastRunId`, `lastRunAt`).
 - **Plain object only.** Top-level `extensions` must be a JSON object — arrays, `null`, and scalars are rejected by `sd update` and flagged by `sd doctor`. Nested values inside the object can be anything.
-- **Concurrent writes follow the JSONL merge model.** Like every other field, two branches that update `extensions` on the same issue collapse via `merge=union` + dedup-on-read (last-occurrence wins). Consumers needing strict ordering should serialize through a single agent.
+- **Concurrent writes follow the JSONL merge model.** Like every other field, two branches that update different `extensions` keys on the same issue merge cleanly via `sd merge-driver`; the same key changed differently on both sides is a merge conflict. Consumers needing strict ordering should serialize through a single agent.
 
 ### Schedule-aware ready (opt-in)
 
@@ -412,7 +413,7 @@ Writes hold the `config.yaml` advisory lock and validate the post-write file as 
 
 ## Architecture
 
-Seeds stores all data in JSONL files inside a `.seeds/` directory — one JSON object per line, fully diffable and mergeable via git. Advisory file locks (`O_CREAT | O_EXCL`) and atomic writes (temp file + rename) ensure safe concurrent access from multiple agents. The `merge=union` gitattribute handles parallel branch merges; dedup-on-read (last occurrence wins) resolves any duplicates. See [CLAUDE.md](CLAUDE.md) for full technical details.
+Seeds stores all data in JSONL files inside a `.seeds/` directory — one JSON object per line, fully diffable and mergeable via git. Advisory file locks (`O_CREAT | O_EXCL`) and atomic writes (temp file + rename) ensure safe concurrent access from multiple agents. The `sd merge-driver` git merge driver handles parallel branch merges; dedup-on-read (last occurrence wins) resolves any duplicates. See [CLAUDE.md](CLAUDE.md) for full technical details.
 
 ## Priority Scale
 
@@ -434,14 +435,16 @@ Seeds stores all data in JSONL files inside a `.seeds/` directory — one JSON o
   .gitignore           # Ignores *.lock files
 ```
 
-Add to your `.gitattributes` (done automatically by `sd init`):
+`sd init` adds to `.gitattributes` and registers the driver in git config (re-run `sd init` or `sd doctor --fix` in a fresh clone; git config is not committed):
 
 ```
-.seeds/issues.jsonl merge=union
-.seeds/templates.jsonl merge=union
+.seeds/issues.jsonl merge=seeds-jsonl
+.seeds/templates.jsonl merge=seeds-jsonl
+.seeds/plans.jsonl merge=seeds-jsonl
+# git config merge.seeds-jsonl.driver "sd merge-driver %O %A %B %P"
 ```
 
-The `merge=union` strategy handles parallel agent branch merges. Seeds deduplicates by ID on read (last occurrence wins), so conflicts resolve automatically.
+Seeds rewrites rows in place (close, update, plan edit), so `merge=union` would keep two contradictory copies of every row edited on both branches and report a clean merge. The driver does a 3-way merge keyed by `id`: a field changed on one side takes that side, arrays like `blockedBy`/`labels` apply both sides' additions and removals, `updatedAt` takes the later value, and a field changed differently on both sides exits non-zero with the row left between conflict markers. `sd doctor` checks the strategy git actually resolves (`git check-attr`), so a store routed to your own driver is accepted and never overwritten; legacy `merge=union` lines are migrated by `sd doctor --fix`.
 
 ## JSON Output
 
@@ -461,7 +464,8 @@ Seeds is safe for concurrent multi-agent use:
 
 - **Advisory file locks** — `O_CREAT | O_EXCL`, 30s stale threshold, 100ms retry with jitter, 30s timeout
 - **Atomic writes** — temp file + rename under lock
-- **Dedup on read** — last occurrence wins after `merge=union` git merges
+- **3-way merge driver** — `sd merge-driver` merges concurrent branch edits per row and field
+- **Dedup on read** — last occurrence wins if duplicate rows ever land
 
 ## Part of os-eco
 

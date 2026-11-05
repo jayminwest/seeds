@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Command } from "commander";
+import { ensureMergeStrategy } from "../merge-strategy.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import {
 	CONFIG_FILE,
@@ -11,33 +12,15 @@ import {
 	TEMPLATES_FILE,
 } from "../types.ts";
 
-export const MERGE_UNION_LINES = [
-	".seeds/issues.jsonl merge=union",
-	".seeds/templates.jsonl merge=union",
-	".seeds/plans.jsonl merge=union",
-];
-
-function ensureGitattributes(cwd: string): void {
-	const gitattrsPath = join(cwd, ".gitattributes");
-	if (existsSync(gitattrsPath)) {
-		const existing = readFileSync(gitattrsPath, "utf8");
-		const missing = MERGE_UNION_LINES.filter((line) => !existing.includes(line));
-		if (missing.length === 0) return;
-		const sep = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
-		writeFileSync(gitattrsPath, `${existing}${sep}${missing.join("\n")}\n`);
-	} else {
-		writeFileSync(gitattrsPath, `${MERGE_UNION_LINES.join("\n")}\n`);
-	}
-}
-
 export async function run(args: string[]): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const cwd = process.cwd();
 	const seedsDir = join(cwd, SEEDS_DIR_NAME);
 
 	if (existsSync(join(seedsDir, CONFIG_FILE))) {
-		// Re-run still backfills any missing merge=union lines per-file.
-		ensureGitattributes(cwd);
+		// Re-run still repairs the per-store merge strategy (migrates legacy
+		// merge=union lines, registers the driver in a fresh clone).
+		ensureMergeStrategy(cwd);
 		if (jsonMode) {
 			await outputJson({ success: true, command: "init", dir: seedsDir });
 		} else {
@@ -65,7 +48,7 @@ export async function run(args: string[]): Promise<void> {
 	// commits them.
 	writeFileSync(join(seedsDir, ".gitignore"), "*.lock\n*.tmp.*\n*.lock.stale.*\n");
 
-	ensureGitattributes(cwd);
+	ensureMergeStrategy(cwd);
 
 	if (jsonMode) {
 		await outputJson({ success: true, command: "init", dir: seedsDir });

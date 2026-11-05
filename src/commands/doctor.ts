@@ -4,6 +4,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
 import { dedupKey, findIdCollisions } from "../id-collisions.ts";
+import { ensureMergeStrategy, inspectMergeStrategy } from "../merge-strategy.ts";
 import { brand, muted, outputJson } from "../output.ts";
 import { readIssues, readPlans } from "../store.ts";
 import type { Issue, Plan, Template } from "../types.ts";
@@ -14,7 +15,6 @@ import {
 	VALID_STATUSES,
 	VALID_TYPES,
 } from "../types.ts";
-import { MERGE_UNION_LINES } from "./init.ts";
 
 interface DoctorCheck {
 	name: string;
@@ -541,28 +541,14 @@ function checkStaleLocks(seedsDir: string): DoctorCheck {
 }
 
 function checkGitattributes(seedsDir: string): DoctorCheck {
-	const projectRoot = projectRootFromSeedsDir(seedsDir);
-	const gitattrsPath = join(projectRoot, ".gitattributes");
-	const details: string[] = [];
-
-	if (!existsSync(gitattrsPath)) {
-		details.push(".gitattributes file not found");
-	} else {
-		const content = readFileSync(gitattrsPath, "utf8");
-		for (const line of MERGE_UNION_LINES) {
-			if (!content.includes(line)) {
-				details.push(`Missing: ${line}`);
-			}
-		}
-	}
-
-	if (details.length > 0) {
+	const problems = inspectMergeStrategy(projectRootFromSeedsDir(seedsDir));
+	if (problems.length > 0) {
 		return {
 			name: "gitattributes",
 			status: "warn",
-			message: "Missing merge=union gitattributes entries",
-			details,
-			fixable: true,
+			message: "Unsafe or missing merge strategy for .seeds/*.jsonl",
+			details: problems.map((p) => p.message),
+			fixable: problems.some((p) => p.fixable),
 		};
 	}
 	return {
@@ -641,7 +627,7 @@ function applyFixes(seedsDir: string, checks: DoctorCheck[]): string[] {
 				break;
 			}
 			case "gitattributes": {
-				fixGitattributes(seedsDir, fixed);
+				fixed.push(...ensureMergeStrategy(projectRootFromSeedsDir(seedsDir)));
 				break;
 			}
 		}
@@ -857,27 +843,6 @@ function fixBidirectional(seedsDir: string, fixed: string[]): void {
 		const content = `${issues.map((i) => JSON.stringify(i)).join("\n")}\n`;
 		writeFileSync(join(seedsDir, ISSUES_FILE), content);
 		fixed.push("Added missing bidirectional dependency links");
-	}
-}
-
-function fixGitattributes(seedsDir: string, fixed: string[]): void {
-	const projectRoot = projectRootFromSeedsDir(seedsDir);
-	const gitattrsPath = join(projectRoot, ".gitattributes");
-
-	if (!existsSync(gitattrsPath)) {
-		writeFileSync(gitattrsPath, `${MERGE_UNION_LINES.join("\n")}\n`);
-		fixed.push("Created .gitattributes with merge=union entries");
-		return;
-	}
-
-	const content = readFileSync(gitattrsPath, "utf8");
-	const missing = MERGE_UNION_LINES.filter((line) => !content.includes(line));
-
-	if (missing.length > 0) {
-		const suffix = missing.map((e) => `${e}\n`).join("");
-		const separator = content.endsWith("\n") ? "" : "\n";
-		writeFileSync(gitattrsPath, `${content}${separator}${suffix}`);
-		fixed.push("Added missing merge=union entries to .gitattributes");
 	}
 }
 

@@ -33,6 +33,7 @@ export async function registerAll(program: Command): Promise<void> {
 		import("./commands/config.ts"),
 		import("./commands/setup.ts"),
 		import("./commands/guard.ts"),
+		import("./commands/merge-driver.ts"),
 	]);
 
 	for (const mod of mods) {

@@ -46,6 +46,8 @@ seeds/
     yaml.ts                   # Minimal YAML parser (flat key-value only)
     markers.ts                # Marker-delimited section helpers (onboard)
     filter.ts                 # Shared issue filter logic (list + ready)
+    jsonl-merge.ts            # 3-way JSONL merge by row id (sd merge-driver)
+    merge-strategy.ts         # .gitattributes + git config merge driver: inspect/ensure
     commands/
       init.ts                 # sd init
       create.ts               # sd create
@@ -68,6 +70,7 @@ seeds/
       prime.ts                # sd prime
       setup.ts                # sd setup claude
       guard.ts                # sd guard (PreToolUse hook)
+      merge-driver.ts         # sd merge-driver (git merge driver for .seeds/*.jsonl)
       onboard.ts              # sd onboard
       upgrade.ts              # sd upgrade
       completions.ts          # sd completions
@@ -130,7 +133,7 @@ See `docs/check-all-standard.md` at the os-eco root. Per-repo CI-parity escape h
   .gitignore           # Ignores lock files
 ```
 
-Git merge strategy: `merge=union` gitattribute on JSONL files. Dedup-on-read (last occurrence wins) handles duplicates from parallel branch merges.
+Git merge strategy: `merge=seeds-jsonl` on every store (`src/merge-strategy.ts`), driver `sd merge-driver %O %A %B %P` registered in git config by `sd init` / `sd doctor --fix`. Never `merge=union`: rows are rewritten in place, so union keeps contradictory copies and reports a clean merge. The driver (`src/jsonl-merge.ts`) 3-way merges by row id and field; genuine conflicts exit non-zero. Doctor validates the resolved strategy via `git check-attr` and leaves custom drivers alone. Dedup-on-read (last occurrence wins) still guards against stray duplicates.
 
 ## CLI Command Reference
 
@@ -200,6 +203,7 @@ sd prime                               Output AI agent context + live state (in-
 sd setup claude                        Install Claude Code hooks (.claude/settings.json)
   --remove                             Remove seeds hooks
 sd guard                               PreToolUse hook: deny hand edits to .seeds/*.jsonl
+sd merge-driver <O> <A> <B> [path]     Git merge driver: 3-way merge of .seeds/*.jsonl by row id
 sd onboard                             Add seeds section to CLAUDE.md / AGENTS.md
 sd upgrade                             Upgrade seeds to latest version from npm
   --check                              Check for updates without installing
