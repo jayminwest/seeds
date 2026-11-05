@@ -77,6 +77,7 @@ seeds/
     cli-smoke.test.ts         # CLI binary smoke tests (real subprocess)
     markers.test.ts           # Marker section tests
     store.test.ts             # Core data layer tests
+    store-lock.test.ts        # Lock owner record + dead-holder reclaim
     id.test.ts                # ID generation tests
     yaml.test.ts              # YAML parser tests
     commands/
@@ -284,6 +285,7 @@ sd plan review <pl-id> --by <name>     Record a reviewer (informational; not a s
 ### Concurrency
 
 - Advisory file locks (`O_CREAT | O_EXCL`, 30s stale, 100ms retry, 30s timeout)
+- Lock file holds `{pid, host, startedAt}`; a same-host lock whose pid is dead is reclaimed at once. Otherwise mtime age > 30s means stale; holders heartbeat the mtime every 10s
 - Atomic writes (temp file + rename) under lock
 - Creates append under lock; mutations rewrite atomically
 

@@ -1,9 +1,20 @@
 import { randomBytes } from "node:crypto";
-import { closeSync, openSync, renameSync, statSync, unlinkSync } from "node:fs";
+import {
+	closeSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	statSync,
+	unlinkSync,
+	utimesSync,
+	writeSync,
+} from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Issue, Plan, Template } from "./types.ts";
 import {
 	ISSUES_FILE,
+	LOCK_HEARTBEAT_MS,
 	LOCK_RETRY_MS,
 	LOCK_STALE_MS,
 	LOCK_TIMEOUT_MS,
@@ -65,20 +76,84 @@ function reclaimStaleLock(lock: string, originalStat: { ino: number; mtimeMs: nu
 	}
 }
 
-async function acquireLock(dataFilePath: string): Promise<void> {
+/** Owner record written into every lock file by its holder. */
+export interface LockOwner {
+	pid: number;
+	host: string;
+	startedAt: string;
+}
+
+function readLockOwner(lock: string): LockOwner | null {
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(lock, "utf8"));
+		if (typeof parsed !== "object" || parsed === null) return null;
+		const { pid, host, startedAt } = parsed as Record<string, unknown>;
+		if (typeof pid !== "number" || typeof host !== "string") return null;
+		return { pid, host, startedAt: typeof startedAt === "string" ? startedAt : "" };
+	} catch {
+		return null; // missing, empty (holder mid-write), or legacy ownerless lock
+	}
+}
+
+function processAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (err: unknown) {
+		return (err as NodeJS.ErrnoException).code !== "ESRCH"; // EPERM: alive, not ours
+	}
+}
+
+/**
+ * A lock is stale when its holder on this host is provably dead (reclaim at
+ * once), or — for cross-host, legacy, or unreadable locks — when its mtime is
+ * older than LOCK_STALE_MS. Live holders heartbeat the mtime, so the age
+ * fallback only fires for holders that stopped running.
+ */
+export function isLockStale(lock: string, st: { mtimeMs: number }): boolean {
+	if (Date.now() - st.mtimeMs > LOCK_STALE_MS) return true;
+	const owner = readLockOwner(lock);
+	return owner !== null && owner.host === hostname() && !processAlive(owner.pid);
+}
+
+function describeOwner(lock: string): string {
+	const owner = readLockOwner(lock);
+	if (!owner) return "";
+	return ` (held by pid ${String(owner.pid)} on ${owner.host} since ${owner.startedAt})`;
+}
+
+/** Create the lock exclusively (throws EEXIST if held) and stamp it with our owner record. */
+function createOwnedLock(lock: string): number {
+	const fd = openSync(lock, "wx");
+	try {
+		const owner: LockOwner = {
+			pid: process.pid,
+			host: hostname(),
+			startedAt: new Date().toISOString(),
+		};
+		writeSync(fd, JSON.stringify(owner));
+	} catch (err: unknown) {
+		closeSync(fd);
+		bestEffortUnlink(lock); // never leave an ownerless lock we created
+		throw err;
+	}
+	closeSync(fd);
+	return statSync(lock).ino;
+}
+
+/** Acquire the lock; returns the lock file's inode so the holder can heartbeat it. */
+async function acquireLock(dataFilePath: string): Promise<number> {
 	const lock = lockFilePath(dataFilePath);
 	const start = Date.now();
 	while (true) {
 		try {
-			const fd = openSync(lock, "wx");
-			closeSync(fd);
-			return;
+			return createOwnedLock(lock);
 		} catch (err: unknown) {
 			const nodeErr = err as NodeJS.ErrnoException;
 			if (nodeErr.code !== "EEXIST") throw err;
 			try {
 				const st = statSync(lock);
-				if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
+				if (isLockStale(lock, st)) {
 					reclaimStaleLock(lock, st);
 					continue;
 				}
@@ -86,10 +161,22 @@ async function acquireLock(dataFilePath: string): Promise<void> {
 				continue;
 			}
 			if (Date.now() - start > LOCK_TIMEOUT_MS) {
-				throw new Error(`Timeout acquiring lock for ${dataFilePath}`);
+				throw new Error(`Timeout acquiring lock for ${dataFilePath}${describeOwner(lock)}`);
 			}
 			await sleep(LOCK_RETRY_MS + Math.floor(Math.random() * LOCK_RETRY_MS));
 		}
+	}
+}
+
+/** Refresh the lock's mtime, but only while it is still the inode we created. */
+function heartbeat(dataFilePath: string, ino: number): void {
+	const lock = lockFilePath(dataFilePath);
+	try {
+		if (statSync(lock).ino !== ino) return;
+		const now = new Date();
+		utimesSync(lock, now, now);
+	} catch {
+		// lock gone; release will no-op
 	}
 }
 
@@ -106,10 +193,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function withLock<T>(dataFilePath: string, fn: () => Promise<T>): Promise<T> {
-	await acquireLock(dataFilePath);
+	const ino = await acquireLock(dataFilePath);
+	const timer = setInterval(() => heartbeat(dataFilePath, ino), LOCK_HEARTBEAT_MS);
+	timer.unref();
 	try {
 		return await fn();
 	} finally {
+		clearInterval(timer);
 		releaseLock(dataFilePath);
 	}
 }
