@@ -11,6 +11,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isInsideGitRepo } from "./config.ts";
 import { ISSUES_FILE, PLANS_FILE, SEEDS_DIR_NAME, TEMPLATES_FILE } from "./types.ts";
 
 export const MERGE_DRIVER_NAME = "seeds-jsonl";
@@ -45,6 +46,8 @@ function git(root: string, args: string[]): { ok: boolean; out: string } {
 
 /** The resolved `merge` attribute per store path via git, or null outside a git repo. */
 function resolveWithGit(root: string): Map<string, string> | null {
+	// Outside a repo check-attr just fails; skip the spawn (seeds-056d).
+	if (!isInsideGitRepo(root)) return null;
 	const r = git(root, ["check-attr", "merge", "--", ...STORE_PATHS]);
 	if (!r.ok) return null;
 	const out = new Map<string, string>();

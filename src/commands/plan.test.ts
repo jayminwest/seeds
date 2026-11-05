@@ -1,17 +1,24 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCli } from "../test-harness.ts";
+import { runCli as run } from "../test-harness.ts";
 
 const CLI = join(import.meta.dir, "../../src/index.ts");
 
-async function run(
-	args: string[],
-	cwd: string,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	return runCli(args, cwd);
-}
+// Keep the host's `ml` off PATH: `plan prompt` would otherwise spawn it on
+// every call (~100ms each, machine-dependent result) (seeds-056d).
+const hostPath = process.env.PATH ?? "";
+beforeAll(() => {
+	process.env.PATH = hostPath
+		.split(":")
+		.filter((d) => !existsSync(join(d, "ml")))
+		.join(":");
+});
+afterAll(() => {
+	process.env.PATH = hostPath;
+});
 
 let tmpDir: string;
 
@@ -337,12 +344,15 @@ describe("sd plan submit", () => {
 
 	test("--plan - reads from stdin", async () => {
 		const seedId = await createSeed(tmpDir, "Stdin parent");
-		const proc = Bun.spawn(["bun", "run", CLI, "plan", "submit", seedId, "--plan", "-", "--json"], {
-			cwd: tmpDir,
-			stdin: "pipe",
-			stdout: "pipe",
-			stderr: "pipe",
-		});
+		const proc = Bun.spawn(
+			[process.execPath, "run", CLI, "plan", "submit", seedId, "--plan", "-", "--json"],
+			{
+				cwd: tmpDir,
+				stdin: "pipe",
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
 		proc.stdin.write(JSON.stringify(validPlanFor()));
 		await proc.stdin.end();
 		const stdout = await new Response(proc.stdout).text();

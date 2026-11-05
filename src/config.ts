@@ -103,6 +103,11 @@ export function isInsideWorktree(dir?: string): boolean {
 	return dirs !== null && dirs.gitDir !== dirs.commonDir;
 }
 
+/** Whether `dir` is inside a git work tree, answered without spawning git. */
+export function isInsideGitRepo(dir: string): boolean {
+	return resolveGitDirs(dir) !== null;
+}
+
 export async function findSeedsDir(startDir?: string): Promise<string> {
 	let dir = startDir ?? process.cwd();
 	while (true) {

@@ -1,23 +1,53 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-const CLI = join(import.meta.dir, "../../src/index.ts");
+import { runCli } from "../test-harness.ts";
 
 let tmpDir: string;
 let binDir: string;
 let invocationLog: string;
 let originalPath: string | undefined;
 
+// The fake `ml` is written once per file (macOS pays a ~120ms first-exec
+// penalty per new executable, seeds-056d); each test stages its behavior in
+// fake-ml.json via writeFakeMl.
+beforeAll(async () => {
+	binDir = await mkdtemp(join(tmpdir(), "seeds-record-decision-bin-"));
+	const body = `#!/usr/bin/env bun
+const fs = require("node:fs");
+const cfg = JSON.parse(fs.readFileSync(${JSON.stringify(join(binDir, "fake-ml.json"))}, "utf8"));
+const argv = process.argv.slice(2);
+fs.appendFileSync(cfg.log, JSON.stringify(argv) + "\\n");
+const isStatus = argv[0] === "--json" && argv[1] === "status";
+if (isStatus) {
+	process.stdout.write(cfg.status);
+	process.exit(0);
+}
+if (argv[0] === "record") {
+	if (cfg.record.length > 0) {
+		process.stdout.write(cfg.record);
+	}
+	process.exit(cfg.recordExit);
+}
+process.exit(0);
+`;
+	const scriptPath = join(binDir, "ml");
+	await writeFile(scriptPath, body);
+	await chmod(scriptPath, 0o755);
+});
+
+afterAll(async () => {
+	await rm(binDir, { recursive: true, force: true });
+});
+
 beforeEach(async () => {
 	tmpDir = await mkdtemp(join(tmpdir(), "seeds-record-decision-"));
-	binDir = join(tmpDir, "bin");
-	await mkdir(binDir, { recursive: true });
 	invocationLog = join(tmpDir, "ml-invocations.log");
 	originalPath = process.env.PATH;
-	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
-	await runSd(["init"], tmpDir);
+	// Tests that never call writeFakeMl run with no `ml` on PATH at all.
+	process.env.PATH = tmpDir;
+	await runCli(["init"], tmpDir);
 });
 
 afterEach(async () => {
@@ -26,29 +56,11 @@ afterEach(async () => {
 	await rm(tmpDir, { recursive: true, force: true });
 });
 
-async function runSd(
-	args: string[],
-	cwd: string,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const proc = Bun.spawn(["bun", "run", CLI, ...args], {
-		cwd,
-		stdout: "pipe",
-		stderr: "pipe",
-		// Children inherit process.env.PATH which includes our fake-ml bin/.
-		env: { ...process.env },
-	});
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
-	const exitCode = await proc.exited;
-	return { stdout, stderr, exitCode };
-}
-
 async function writeFakeMl(opts: {
 	recordExit?: number;
 	statusJson?: unknown;
 	recordJson?: unknown;
 }): Promise<void> {
-	const recordExit = opts.recordExit ?? 0;
 	// Default ml status response: declares one domain "commands" so domain
 	// inference can match a label-bearing seed.
 	const statusJson =
@@ -59,31 +71,17 @@ async function writeFakeMl(opts: {
 					domains: [{ domain: "commands" }, { domain: "docs" }],
 				}
 			: opts.statusJson;
-	const statusJsonStr = JSON.stringify(statusJson);
 	// recordJson stub: when set, the fake emits this on `record` so the parent
 	// process can parse a mulch id from stdout. Default empty mirrors older
 	// mulch CLIs that didn't accept --json on record.
-	const recordJsonStr = opts.recordJson === undefined ? "" : JSON.stringify(opts.recordJson);
-	const body = `#!/usr/bin/env bun
-const fs = require("node:fs");
-const argv = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(invocationLog)}, JSON.stringify(argv) + "\\n");
-const isStatus = argv[0] === "--json" && argv[1] === "status";
-if (isStatus) {
-	process.stdout.write(${JSON.stringify(statusJsonStr)});
-	process.exit(0);
-}
-if (argv[0] === "record") {
-	if (${JSON.stringify(recordJsonStr)}.length > 0) {
-		process.stdout.write(${JSON.stringify(recordJsonStr)});
-	}
-	process.exit(${recordExit});
-}
-process.exit(0);
-`;
-	const scriptPath = join(binDir, "ml");
-	await writeFile(scriptPath, body);
-	await chmod(scriptPath, 0o755);
+	const cfg = {
+		log: invocationLog,
+		status: JSON.stringify(statusJson),
+		record: opts.recordJson === undefined ? "" : JSON.stringify(opts.recordJson),
+		recordExit: opts.recordExit ?? 0,
+	};
+	await writeFile(join(binDir, "fake-ml.json"), JSON.stringify(cfg));
+	process.env.PATH = `${binDir}:${originalPath ?? ""}`;
 }
 
 async function readInvocations(): Promise<string[][]> {
@@ -99,9 +97,9 @@ async function readInvocations(): Promise<string[][]> {
 }
 
 async function createSeedWithLabel(cwd: string, title: string, label: string): Promise<string> {
-	const create = await runSd(["create", "--title", title, "--type", "task", "--json"], cwd);
+	const create = await runCli(["create", "--title", title, "--type", "task", "--json"], cwd);
 	const id = (JSON.parse(create.stdout) as { id: string }).id;
-	await runSd(["label", "add", id, label], cwd);
+	await runCli(["label", "add", id, label], cwd);
 	return id;
 }
 
@@ -137,7 +135,7 @@ describe("sd plan submit --record-decision", () => {
 		const seedId = await createSeedWithLabel(tmpDir, "Add OAuth login", "commands");
 		const planPath = await writePlan(tmpDir, validPlan("Use OAuth library"));
 
-		const res = await runSd(
+		const res = await runCli(
 			["plan", "submit", seedId, "--plan", planPath, "--record-decision", "--json"],
 			tmpDir,
 		);
@@ -170,7 +168,7 @@ describe("sd plan submit --record-decision", () => {
 		const seedId = await createSeedWithLabel(tmpDir, "Add SSO", "commands");
 		const planPath = await writePlan(tmpDir, validPlan("SSO via SAML"));
 
-		const res = await runSd(
+		const res = await runCli(
 			["plan", "submit", seedId, "--plan", planPath, "--record-decision"],
 			tmpDir,
 		);
@@ -188,7 +186,7 @@ describe("sd plan submit --record-decision", () => {
 		const seedId = await createSeedWithLabel(tmpDir, "JSON SSO", "commands");
 		const planPath = await writePlan(tmpDir, validPlan("SSO via SAML"));
 
-		const res = await runSd(
+		const res = await runCli(
 			["plan", "submit", seedId, "--plan", planPath, "--record-decision", "--json"],
 			tmpDir,
 		);
@@ -204,7 +202,7 @@ describe("sd plan submit --record-decision", () => {
 		const seedId = await createSeedWithLabel(tmpDir, "Bad-record case", "commands");
 		const planPath = await writePlan(tmpDir, validPlan("OAuth approach"));
 
-		const res = await runSd(
+		const res = await runCli(
 			["plan", "submit", seedId, "--plan", planPath, "--record-decision", "--json"],
 			tmpDir,
 		);
@@ -226,33 +224,12 @@ describe("sd plan submit --record-decision", () => {
 		const seedId = await createSeedWithLabel(tmpDir, "No ml available", "commands");
 		const planPath = await writePlan(tmpDir, validPlan("Some approach"));
 
-		// Invoke bun by absolute path so we can set PATH to an empty dir — the
-		// child process's Bun.which("ml") then has no chance of finding ml on
-		// the developer's host machine.
-		const proc = Bun.spawn(
-			[
-				process.execPath,
-				"run",
-				CLI,
-				"plan",
-				"submit",
-				seedId,
-				"--plan",
-				planPath,
-				"--record-decision",
-				"--json",
-			],
-			{
-				cwd: tmpDir,
-				stdout: "pipe",
-				stderr: "pipe",
-				env: { ...process.env, PATH: binDir }, // binDir has no `ml` written
-			},
+		// beforeEach left PATH without `ml`, so the in-process Bun.which("ml")
+		// cannot find one on the developer's host machine either.
+		const { stdout, stderr, exitCode } = await runCli(
+			["plan", "submit", seedId, "--plan", planPath, "--record-decision", "--json"],
+			tmpDir,
 		);
-		const stdout = await new Response(proc.stdout).text();
-		const stderr = await new Response(proc.stderr).text();
-		const exitCode = await proc.exited;
-
 		expect(exitCode).toBe(0);
 		expect(stderr).toContain("--record-decision");
 		expect(stderr).toContain("ml not found");

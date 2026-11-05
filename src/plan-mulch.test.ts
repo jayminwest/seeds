@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { enrichPriorArt, type PriorArtEntry, typesForSection } from "./plan-mulch.ts";
@@ -8,29 +8,14 @@ let tmpDir: string;
 let binDir: string;
 let originalPath: string | undefined;
 
-beforeEach(async () => {
-	tmpDir = await mkdtemp(join(tmpdir(), "seeds-plan-mulch-"));
-	binDir = join(tmpDir, "bin");
-	await mkdir(binDir, { recursive: true });
-	originalPath = process.env.PATH;
-	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
-});
-
-afterEach(async () => {
-	if (originalPath !== undefined) process.env.PATH = originalPath;
-	else delete process.env.PATH;
-	await rm(tmpDir, { recursive: true, force: true });
-});
-
-// Stage canned ml-query responses keyed by `<domain>/<type>`. The fake script
-// reads its own argv and emits the matching JSON, lets the test assert the
-// shape of every shell-out without depending on a real mulch install.
-async function writeFakeMl(opts: {
-	responses: Record<string, { json?: unknown; exit?: number }>;
-}): Promise<void> {
-	const data = JSON.stringify(opts.responses);
+// The fake `ml` script reads its own argv and emits the canned response keyed
+// by `<domain>/<type>`, letting the test assert the shape of every shell-out
+// without depending on a real mulch install. It is written once per file
+// (macOS pays a ~120ms first-exec penalty per new executable, seeds-056d);
+// each test stages its responses via writeFakeMl.
+beforeAll(async () => {
+	binDir = await mkdtemp(join(tmpdir(), "seeds-plan-mulch-bin-"));
 	const responsesFile = join(binDir, "responses.json");
-	await writeFile(responsesFile, data);
 	const body = `#!/usr/bin/env bun
 const fs = require("node:fs");
 const responses = JSON.parse(fs.readFileSync("${responsesFile}", "utf8"));
@@ -54,6 +39,29 @@ process.stdout.write(JSON.stringify(r.json ?? {}));
 	const scriptPath = join(binDir, "ml");
 	await writeFile(scriptPath, body);
 	await chmod(scriptPath, 0o755);
+});
+
+afterAll(async () => {
+	await rm(binDir, { recursive: true, force: true });
+});
+
+beforeEach(async () => {
+	tmpDir = await mkdtemp(join(tmpdir(), "seeds-plan-mulch-"));
+	await writeFakeMl({ responses: {} });
+	originalPath = process.env.PATH;
+	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+});
+
+afterEach(async () => {
+	if (originalPath !== undefined) process.env.PATH = originalPath;
+	else delete process.env.PATH;
+	await rm(tmpDir, { recursive: true, force: true });
+});
+
+async function writeFakeMl(opts: {
+	responses: Record<string, { json?: unknown; exit?: number }>;
+}): Promise<void> {
+	await writeFile(join(binDir, "responses.json"), JSON.stringify(opts.responses));
 }
 
 function makeRecord(

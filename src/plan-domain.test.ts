@@ -1,22 +1,44 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inferDomain } from "./plan-domain.ts";
 import type { Issue } from "./types.ts";
 
-// Each test gets a fresh tmpdir + bin/ on PATH containing a fake `ml` script
-// whose behavior is controlled per-test. This isolates the helper from any
-// real mulch install on the developer's machine.
+// A bin/ on PATH holds a fake `ml` script whose behavior each test controls
+// through data files. This isolates the helper from any real mulch install on
+// the developer's machine. The script is written once per file: macOS pays a
+// ~120ms first-exec penalty for every new executable (seeds-056d).
 
 let tmpDir: string;
 let binDir: string;
 let originalPath: string | undefined;
 
+beforeAll(async () => {
+	binDir = await mkdtemp(join(tmpdir(), "seeds-plan-domain-bin-"));
+	// The fake handles `--json status` (the only call inferDomain makes).
+	const body = `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  "--json status")
+    cat "${binDir}/status.json"
+    exit "$(cat "${binDir}/status.exit")"
+    ;;
+esac
+echo "fake ml: unsupported args: $*" >&2
+exit 99
+`;
+	const scriptPath = join(binDir, "ml");
+	await writeFile(scriptPath, body);
+	await chmod(scriptPath, 0o755);
+});
+
+afterAll(async () => {
+	await rm(binDir, { recursive: true, force: true });
+});
+
 beforeEach(async () => {
 	tmpDir = await mkdtemp(join(tmpdir(), "seeds-plan-domain-"));
-	binDir = join(tmpDir, "bin");
-	await mkdir(binDir, { recursive: true });
 	originalPath = process.env.PATH;
 	process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
 });
@@ -29,24 +51,8 @@ afterEach(async () => {
 
 async function writeFakeMl(opts: { statusJson?: unknown; statusExit?: number }): Promise<void> {
 	const json = opts.statusJson === undefined ? "" : JSON.stringify(opts.statusJson);
-	const exit = opts.statusExit ?? 0;
-	// The fake handles `--json status` (the only call inferDomain makes).
-	const body = `#!/usr/bin/env bash
-set -euo pipefail
-case "$*" in
-  "--json status")
-    cat <<'EOF'
-${json}
-EOF
-    exit ${exit}
-    ;;
-esac
-echo "fake ml: unsupported args: $*" >&2
-exit 99
-`;
-	const scriptPath = join(binDir, "ml");
-	await writeFile(scriptPath, body);
-	await chmod(scriptPath, 0o755);
+	await writeFile(join(binDir, "status.json"), `${json}\n`);
+	await writeFile(join(binDir, "status.exit"), String(opts.statusExit ?? 0));
 }
 
 function makeSeed(overrides: Partial<Issue> = {}): Issue {
