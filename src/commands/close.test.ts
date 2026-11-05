@@ -33,7 +33,10 @@ describe("sd close", () => {
 	test("closes an issue and records --reason, removes blockedBy on dependents", async () => {
 		const a = await createSeed("A", tmpDir);
 		const b = await createSeed("B", tmpDir);
-		await run(["dep", "add", b, "--blocked-by", a], tmpDir);
+		const dep = await run(["dep", "add", b, a], tmpDir);
+		expect(dep.exitCode).toBe(0);
+		const before = await runJson<{ issue: { blockedBy?: string[] } }>(["show", b], tmpDir);
+		expect(before.issue.blockedBy).toEqual([a]);
 
 		const out = await runJson<{ success: boolean; command: string; closed: string[] }>(
 			["close", a, "--reason", "shipped"],
@@ -52,6 +55,21 @@ describe("sd close", () => {
 
 		const bShow = await runJson<{ issue: { blockedBy?: string[] } }>(["show", b], tmpDir);
 		expect(bShow.issue.blockedBy).toBeUndefined();
+	});
+
+	test("re-closing an already-closed issue leaves issues.jsonl byte-identical", async () => {
+		const a = await createSeed("A", tmpDir);
+		await run(["close", a, "--reason", "first"], tmpDir);
+		const file = join(tmpDir, ".seeds", "issues.jsonl");
+		const before = await Bun.file(file).text();
+		await Bun.sleep(5);
+		const out = await runJson<{ success: boolean; closed: string[] }>(
+			["close", a, "--reason", "second"],
+			tmpDir,
+		);
+		expect(out.success).toBe(true);
+		expect(out.closed).toEqual([a]);
+		expect(await Bun.file(file).text()).toBe(before);
 	});
 
 	test("closing multiple ids in one call closes each", async () => {
