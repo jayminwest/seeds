@@ -1522,6 +1522,61 @@ describe("sd plan submit --overwrite", () => {
 		expect(parent.blockedBy).not.toContain(firstChildren[3] ?? "");
 	});
 
+	test("re-stamps plan_step_index on reordered children and clears it on obsolete ones (seeds-fb42)", async () => {
+		const seedId = await createSeed(tmpDir, "Reindex");
+		const v1 = validPlanFor();
+		v1.sections.steps = [
+			{ title: "S1", type: "task", priority: 2, blocks: [] },
+			{ title: "S2", type: "task", priority: 2, blocks: [] },
+			{ title: "S3", type: "task", priority: 2, blocks: [] },
+		];
+		const first = await run(
+			["plan", "submit", seedId, "--plan", await writePlanFile(tmpDir, v1), "--json"],
+			tmpDir,
+		);
+		const firstResult = JSON.parse(first.stdout) as { plan_id: string; children: string[] };
+		const [s1, s2, s3] = firstResult.children;
+
+		const v2 = validPlanFor();
+		v2.sections.steps = [
+			{ title: "S2", type: "task", priority: 2, blocks: [] },
+			{ title: "S1", type: "task", priority: 2, blocks: [] },
+			{ title: "S4", type: "task", priority: 2, blocks: [] },
+		];
+		const overwrite = await run(
+			[
+				"plan",
+				"submit",
+				seedId,
+				"--plan",
+				await writePlanFile(tmpDir, v2),
+				"--overwrite",
+				"--json",
+			],
+			tmpDir,
+		);
+		expect(overwrite.exitCode).toBe(0);
+		const s4 = (JSON.parse(overwrite.stdout) as { children: string[] }).children[2];
+
+		const issues = await readJsonl<{ id: string; title: string; plan_step_index?: number }>(
+			join(tmpDir, ".seeds/issues.jsonl"),
+		);
+		const byId = new Map(issues.map((i) => [i.id, i]));
+		expect(byId.get(s2 ?? "")?.plan_step_index).toBe(0);
+		expect(byId.get(s1 ?? "")?.plan_step_index).toBe(1);
+		expect(byId.get(s4 ?? "")?.plan_step_index).toBe(2);
+		expect(byId.get(s3 ?? "")?.plan_step_index).toBeUndefined();
+
+		// plan edit --step 1 now targets S2 (the seed at blueprint step 1).
+		const edit = await run(
+			["plan", "edit", firstResult.plan_id, "--step", "1", "--title", "X", "--json"],
+			tmpDir,
+		);
+		expect(edit.exitCode).toBe(0);
+		expect((await readIssue(s2 ?? "")).title).toBe("X");
+		expect((await readIssue(s1 ?? "")).title).toBe("S1");
+	});
+
 	test("validation failure on overwrite leaves the prior plan untouched", async () => {
 		const seedId = await createSeed(tmpDir, "No clobber");
 		const planPath = await writePlanFile(tmpDir, validPlanFor());

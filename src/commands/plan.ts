@@ -1130,40 +1130,19 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 		if (!step) continue;
 		const childId = finalChildIds[i];
 		if (!childId) continue;
-		if (usedOldIds.has(childId)) {
+		const external = adoptedExternalIds.has(childId);
+		if (external || usedOldIds.has(childId)) {
 			const matchedIdx = allIssues.findIndex((iss) => iss.id === childId);
 			const matched = allIssues[matchedIdx];
 			if (matched) {
-				// seeds-bac9 — overwrite/revision path: additively merge
-				// step.labels into the matched child's labels. Never strips
-				// labels — manual edits and previously merged labels survive.
+				// seeds-bac9 — additively merge step.labels into the matched or
+				// adopted seed's labels. Never strips — manual edits survive.
 				const mergedLabels = mergeAdoptedLabels(matched.labels, step.labels);
+				// seeds-fb42 — always re-stamp plan_step_index: a matched child
+				// may have moved steps, and `plan edit --step` resolves by it.
 				allIssues[matchedIdx] = {
 					...matched,
-					description: applyPlanBackref(matched.description, {
-						stepIndex: i,
-						planId: existingPlan.id,
-						parentSeedId: seed.id,
-						parentSeedTitle: seed.title,
-						templateName,
-						approach,
-					}),
-					...(mergedLabels ? { labels: mergedLabels } : {}),
-					updatedAt: now,
-				};
-			}
-			continue;
-		}
-		if (adoptedExternalIds.has(childId)) {
-			const matchedIdx = allIssues.findIndex((iss) => iss.id === childId);
-			const matched = allIssues[matchedIdx];
-			if (matched) {
-				// seeds-bac9 — overwrite path external adoption: merge
-				// step.labels into the newly linked seed's existing labels.
-				const mergedLabels = mergeAdoptedLabels(matched.labels, step.labels);
-				allIssues[matchedIdx] = {
-					...matched,
-					plan_id: existingPlan.id,
+					...(external ? { plan_id: existingPlan.id } : {}),
 					plan_step_index: i,
 					description: applyPlanBackref(matched.description, {
 						stepIndex: i,
@@ -1284,6 +1263,14 @@ function applyOverwrite(args: OverwriteArgs): OverwriteResult {
 
 	// Obsolete children = old plan children with no matching step in new plan.
 	const obsolete: Issue[] = oldChildIssues.filter((c) => !usedOldIds.has(c.id));
+	// seeds-fb42 — obsolete children no longer map to any step; clear their
+	// stale plan_step_index so it can't collide with the step that now owns it.
+	for (const o of obsolete) {
+		const idx = allIssues.findIndex((iss) => iss.id === o.id);
+		const row = allIssues[idx];
+		if (!row || row.plan_step_index === undefined) continue;
+		allIssues[idx] = { ...row, plan_step_index: undefined, updatedAt: now };
+	}
 
 	// Parent seed: drop obsolete from blockedBy, ensure all current plan
 	// children are present. Preserve unrelated blockers; dedupe against

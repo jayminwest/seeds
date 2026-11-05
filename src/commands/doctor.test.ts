@@ -379,6 +379,58 @@ describe("doctor: circular-dependencies check", () => {
 	});
 });
 
+describe("doctor: plan-step-index check (seeds-fb42)", () => {
+	// Seeds test-0001/0002 are plan children; any other id is not.
+	async function check(seeds: Array<[string, number]>, steps: unknown[]) {
+		await run(["init"], tmpDir);
+		const now = new Date().toISOString();
+		const base = { status: "open", type: "task", priority: 2, createdAt: now, updatedAt: now };
+		const rows = seeds.map(([id, idx]) =>
+			JSON.stringify({ id, title: id, ...base, plan_id: "pl-0001", plan_step_index: idx }),
+		);
+		writeFileSync(join(seedsDir(tmpDir), "issues.jsonl"), `${rows.join("\n")}\n`);
+		const plan = { id: "pl-0001", seed: "test-0000", template: "feature", status: "approved" };
+		const row = { ...plan, revision: 1, sections: { steps }, createdAt: now, updatedAt: now };
+		const children = ["test-0001", "test-0002"];
+		writeFileSync(
+			join(seedsDir(tmpDir), "plans.jsonl"),
+			`${JSON.stringify({ ...row, children })}\n`,
+		);
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		return result.checks.find((ch) => ch.name === "plan-step-index");
+	}
+
+	test("passes when every index maps to a step of the owning plan", async () => {
+		const steps = [{ title: "A" }, { title: "B", existing_seed: "test-0002" }];
+		const c = await check(
+			[
+				["test-0001", 0],
+				["test-0002", 1],
+			],
+			steps,
+		);
+		expect(c?.status).toBe("pass");
+	});
+
+	test("warns on non-child, out-of-range index, and existing_seed mismatch", async () => {
+		const steps = [{ title: "A", existing_seed: "test-0001" }];
+		const c = await check(
+			[
+				["test-0001", 5],
+				["test-0002", 0],
+				["test-0003", 0],
+			],
+			steps,
+		);
+		expect(c?.status).toBe("warn");
+		const details = c?.details.join("\n") ?? "";
+		expect(c?.details).toHaveLength(3);
+		expect(details).toContain("out of range");
+		expect(details).toContain("pins test-0001");
+		expect(details).toContain("test-0003.plan_step_index=0 but it is not a child");
+	});
+});
+
 describe("doctor: stale-locks check", () => {
 	test("warns on stale lock file", async () => {
 		await run(["init"], tmpDir);
@@ -621,7 +673,7 @@ describe("doctor: json output", () => {
 		expect(result.success).toBe(true);
 		expect(result.summary.fail).toBe(0);
 		expect(result.summary.warn).toBe(0);
-		expect(result.summary.pass).toBe(12);
+		expect(result.summary.pass).toBe(13);
 	});
 });
 

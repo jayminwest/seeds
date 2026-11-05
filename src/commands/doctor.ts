@@ -4,8 +4,8 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
 import { brand, muted, outputJson } from "../output.ts";
-import { readIssues } from "../store.ts";
-import type { Issue, Template } from "../types.ts";
+import { readIssues, readPlans } from "../store.ts";
+import type { Issue, Plan, Template } from "../types.ts";
 import {
 	ISSUES_FILE,
 	LOCK_STALE_MS,
@@ -267,6 +267,61 @@ function checkBidirectionalConsistency(issues: Issue[]): DoctorCheck {
 		name: "bidirectional-consistency",
 		status: "pass",
 		message: "All dependency links are bidirectional",
+		details: [],
+		fixable: false,
+	};
+}
+
+// seeds-fb42 — plan_step_index is how `sd plan edit --step` and the backref
+// block resolve a child to its blueprint step. Flag indexes that point nowhere:
+// the seed is not a child of any plan, the index is outside the plan's steps,
+// or the step pins a different seed via existing_seed.
+function checkPlanStepIndex(issues: Issue[], plans: Plan[]): DoctorCheck {
+	const planByChild = new Map<string, Plan>();
+	for (const plan of plans) {
+		for (const childId of plan.children) planByChild.set(childId, plan);
+	}
+	const details: string[] = [];
+	for (const issue of issues) {
+		const idx = issue.plan_step_index;
+		if (idx === undefined) continue;
+		const plan = planByChild.get(issue.id);
+		if (!plan) {
+			details.push(`${issue.id}.plan_step_index=${String(idx)} but it is not a child of any plan`);
+			continue;
+		}
+		const rawSteps = plan.sections.steps;
+		const steps = Array.isArray(rawSteps) ? rawSteps : [];
+		const step: unknown = steps[idx];
+		if (step === undefined) {
+			details.push(
+				`${issue.id}.plan_step_index=${String(idx)} is out of range for ${plan.id} (${String(steps.length)} steps)`,
+			);
+			continue;
+		}
+		const pinned =
+			typeof step === "object" && step !== null
+				? (step as { existing_seed?: unknown }).existing_seed
+				: undefined;
+		if (typeof pinned === "string" && pinned !== issue.id) {
+			details.push(
+				`${issue.id}.plan_step_index=${String(idx)} but ${plan.id} step ${String(idx + 1)} pins ${pinned}`,
+			);
+		}
+	}
+	if (details.length > 0) {
+		return {
+			name: "plan-step-index",
+			status: "warn",
+			message: `${String(details.length)} incoherent plan_step_index value(s)`,
+			details,
+			fixable: false,
+		};
+	}
+	return {
+		name: "plan-step-index",
+		status: "pass",
+		message: "All plan_step_index values map to a plan step",
 		details: [],
 		fixable: false,
 	};
@@ -867,6 +922,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	checks.push(checkReferentialIntegrity(issues));
 	checks.push(checkBidirectionalConsistency(issues));
 	checks.push(checkCircularDependencies(issues));
+	checks.push(checkPlanStepIndex(issues, await readPlans(dir)));
 	checks.push(checkLabelSchema(dir));
 	checks.push(checkExtensionsSchema(dir));
 	checks.push(checkClosedFieldsConsistency(dir));
@@ -896,6 +952,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 				reChecks.push(checkReferentialIntegrity(reIssues));
 				reChecks.push(checkBidirectionalConsistency(reIssues));
 				reChecks.push(checkCircularDependencies(reIssues));
+				reChecks.push(checkPlanStepIndex(reIssues, await readPlans(dir)));
 				reChecks.push(checkLabelSchema(dir));
 				reChecks.push(checkExtensionsSchema(dir));
 				reChecks.push(checkClosedFieldsConsistency(dir));
