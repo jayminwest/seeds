@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/log.ts` and the `pino` / `pino-pretty` devDependencies. The logger was dead in production (devDependencies never ship, so the lazy import always failed). `SEEDS_DEBUG=1` now prints the top-level error's stack to stderr instead. (seeds-8f00)
 
 ### Changed
+- Cold start roughly halved (`sd ready` ~55ms → ~30ms, `sd --version` ~44ms → ~22ms): the CLI imports only the invoked command's module (the full tree still loads for `--help`, unknown commands and `completions`), and worktree detection reads `.git` / `gitdir:` / `commondir` from the filesystem instead of spawning `git rev-parse` (git is still used when `GIT_DIR` / `GIT_COMMON_DIR` is set). (seeds-2ba4)
 - `knip.json` marks `src/**` as production project files so `knip --production` analyzes the shipped graph (previously it falsely reported `ajv` unused). (seeds-8f00)
 
 ## [0.6.0] - 2026-09-29

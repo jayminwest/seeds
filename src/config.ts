@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { Config, PlanTemplate, SectionSpec } from "./types.ts";
 import { CONFIG_FILE, DEFAULT_MAX_PLAN_DEPTH, SECTION_KINDS, SEEDS_DIR_NAME } from "./types.ts";
@@ -22,33 +22,54 @@ export function maxPlanDepth(config: Config): number {
 	return config.max_plan_depth ?? DEFAULT_MAX_PLAN_DEPTH;
 }
 
-function gitCommonDir(cwd: string): string | null {
-	try {
-		const result = Bun.spawnSync(["git", "rev-parse", "--git-common-dir"], {
-			cwd,
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		if ((result.exitCode ?? 0) !== 0) return null;
-		const raw = new TextDecoder().decode(result.stdout).trim();
-		if (!raw) return null;
-		return resolve(cwd, raw);
-	} catch {
-		return null;
+interface GitDirs {
+	gitDir: string;
+	commonDir: string;
+}
+
+// `git rev-parse --git-dir --git-common-dir`, answered from the filesystem
+// (seeds-2ba4): spawning git cost ~6ms on every sd call. The nearest `.git` is
+// either the git dir or a `gitdir: <path>` pointer file (linked worktree,
+// submodule); only a linked worktree's git dir holds a `commondir` file. An
+// explicit GIT_DIR / GIT_COMMON_DIR (e.g. inside a git hook) defers to git.
+function resolveGitDirs(cwd: string): GitDirs | null {
+	if (process.env.GIT_DIR || process.env.GIT_COMMON_DIR) return gitRevParseDirs(cwd);
+	let dir = resolve(cwd);
+	while (true) {
+		const gitDir = readDotGit(join(dir, ".git"));
+		if (gitDir) return { gitDir, commonDir: readCommonDir(gitDir) };
+		const parent = dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
 	}
 }
 
-function gitDir(cwd: string): string | null {
+function readDotGit(dotGit: string): string | null {
+	const stat = statSync(dotGit, { throwIfNoEntry: false });
+	if (stat?.isDirectory()) return dotGit;
+	if (!stat?.isFile()) return null;
+	const target = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, "utf8"))?.[1];
+	return target ? resolve(dirname(dotGit), target) : null;
+}
+
+function readCommonDir(gitDir: string): string {
+	const file = join(gitDir, "commondir");
+	const raw = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+	return raw ? resolve(gitDir, raw) : gitDir;
+}
+
+function gitRevParseDirs(cwd: string): GitDirs | null {
 	try {
-		const result = Bun.spawnSync(["git", "rev-parse", "--git-dir"], {
+		const result = Bun.spawnSync(["git", "rev-parse", "--git-dir", "--git-common-dir"], {
 			cwd,
+			env: process.env,
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		if ((result.exitCode ?? 0) !== 0) return null;
-		const raw = new TextDecoder().decode(result.stdout).trim();
-		if (!raw) return null;
-		return resolve(cwd, raw);
+		const [gitDir, commonDir] = new TextDecoder().decode(result.stdout).trim().split("\n");
+		if (!gitDir || !commonDir) return null;
+		return { gitDir: resolve(cwd, gitDir), commonDir: resolve(cwd, commonDir) };
 	} catch {
 		return null;
 	}
@@ -56,7 +77,7 @@ function gitDir(cwd: string): string | null {
 
 function resolveWorktreeRoot(candidateSeedsDir: string): string {
 	const candidateRoot = dirname(candidateSeedsDir);
-	const common = gitCommonDir(candidateRoot);
+	const common = resolveGitDirs(candidateRoot)?.commonDir;
 	if (!common) return candidateSeedsDir;
 
 	// .git/worktrees/<name> → strip to repo root; .git → already main
@@ -78,10 +99,8 @@ export function isInsideWorktree(dir?: string): boolean {
 	// In a linked worktree, --git-dir points to .git/worktrees/<name> while
 	// --git-common-dir points to the main .git — they differ.
 	// In the main repo and in submodules, both return the same path.
-	const gd = gitDir(cwd);
-	const common = gitCommonDir(cwd);
-	if (!gd || !common) return false;
-	return gd !== common;
+	const dirs = resolveGitDirs(cwd);
+	return dirs !== null && dirs.gitDir !== dirs.commonDir;
 }
 
 export async function findSeedsDir(startDir?: string): Promise<string> {

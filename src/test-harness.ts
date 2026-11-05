@@ -23,6 +23,7 @@ import { join } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import { setQuiet } from "./output.ts";
+import { COMMAND_LOADERS } from "./register-all.ts";
 
 // Force ANSI off so in-process output matches the subprocess baseline.
 chalk.level = 0;
@@ -40,34 +41,9 @@ interface CommandModule {
 	register?: RegisterFn;
 }
 
-const loaders: Record<string, () => Promise<CommandModule>> = {
-	init: () => import("./commands/init.ts"),
-	create: () => import("./commands/create.ts"),
-	show: () => import("./commands/show.ts"),
-	list: () => import("./commands/list.ts"),
-	ready: () => import("./commands/ready.ts"),
-	search: () => import("./commands/search.ts"),
-	update: () => import("./commands/update.ts"),
-	close: () => import("./commands/close.ts"),
-	dep: () => import("./commands/dep.ts"),
-	label: () => import("./commands/label.ts"),
-	blocked: () => import("./commands/blocked.ts"),
-	stats: () => import("./commands/stats.ts"),
-	sync: () => import("./commands/sync.ts"),
-	doctor: () => import("./commands/doctor.ts"),
-	tpl: () => import("./commands/tpl.ts"),
-	migrate: () => import("./commands/migrate.ts"),
-	prime: () => import("./commands/prime.ts"),
-	onboard: () => import("./commands/onboard.ts"),
-	upgrade: () => import("./commands/upgrade.ts"),
-	completions: () => import("./commands/completions.ts"),
-	block: () => import("./commands/block.ts"),
-	unblock: () => import("./commands/unblock.ts"),
-	config: () => import("./commands/config.ts"),
-	plan: () => import("./commands/plan.ts"),
-	setup: () => import("./commands/setup.ts"),
-	"merge-driver": () => import("./commands/merge-driver.ts"),
-};
+// Keyed by top-level command name; shares src/index.ts's registry so every
+// registered command is drivable here.
+const loaders: Record<string, () => Promise<CommandModule>> = COMMAND_LOADERS;
 
 function formatConsoleArgs(parts: unknown[]): string {
 	return parts

@@ -53,14 +53,14 @@ describe("sd migrate-from-beads", () => {
 			command: string;
 			written: number;
 			skipped: number;
-		}>(["migrate"], tmpDir);
+		}>(["migrate-from-beads"], tmpDir);
 		expect(out.success).toBe(true);
 		expect(out.command).toBe("migrate-from-beads");
 		expect(out.written).toBe(1);
 		expect(out.skipped).toBe(1);
 
 		// Re-running on the same input writes nothing new (existing id dedupe).
-		const out2 = await runJson<{ written: number }>(["migrate"], tmpDir);
+		const out2 = await runJson<{ written: number }>(["migrate-from-beads"], tmpDir);
 		expect(out2.written).toBe(0);
 
 		const list = await runJson<{ issues: Array<{ id: string; title: string; status: string }> }>(
@@ -73,7 +73,7 @@ describe("sd migrate-from-beads", () => {
 	});
 
 	test("errors when .beads/issues.jsonl is absent", async () => {
-		const { exitCode, stderr } = await run(["migrate"], tmpDir);
+		const { exitCode, stderr } = await run(["migrate-from-beads"], tmpDir);
 		expect(exitCode).not.toBe(0);
 		expect(stderr).toContain("Beads issues not found");
 	});

@@ -128,7 +128,7 @@ describe("write paths that build issues from untrusted input", () => {
 			`${beads.map((b) => JSON.stringify(b)).join("\n")}\n`,
 		);
 		const result = await runCliJson<{ written: number; skipped: number }>(
-			["migrate", "--json"],
+			["migrate-from-beads", "--json"],
 			tmpDir,
 		);
 		expect(result).toMatchObject({ written: 1, skipped: 1 });

@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { Command, Help } from "commander";
 import { handleTopLevelError, resolveCommandPath, routeCommanderErrors } from "./error-handler.ts";
 import { brand, muted, outputJson, setQuiet } from "./output.ts";
-import { registerAll } from "./register-all.ts";
+import { registerForArgv } from "./register-all.ts";
 import { suggestForUnknown } from "./suggestions.ts";
 import { installTimingHook } from "./timing.ts";
 import { VERSION } from "./version.ts";
@@ -106,8 +106,15 @@ async function main(): Promise<void> {
 		process.exitCode = 0;
 		return;
 	}
+	// Bare `sd --version`: answer before registerForArgv loads the whole tree.
+	const flagsOnly = rawArgs.every((a) => a.startsWith("-"));
+	const wantsHelp = rawArgs.includes("-h") || rawArgs.includes("--help");
+	if (flagsOnly && !wantsHelp && (rawArgs.includes("-v") || rawArgs.includes("--version"))) {
+		process.stdout.write(`${VERSION}\n`);
+		return;
+	}
 
-	await registerAll(program);
+	await registerForArgv(program, process.argv);
 	if (jsonMode) routeCommanderErrors(program);
 
 	// Check for unknown commands before parsing

@@ -150,3 +150,44 @@ describe("isInsideWorktree", () => {
 		expect(isInsideWorktree(submoduleDir)).toBe(false);
 	});
 });
+
+describe("git dir resolution from the filesystem (seeds-2ba4)", () => {
+	test("follows a relative gitdir: pointer and commondir without git", async () => {
+		// Hand-built linked-worktree layout: no git binary involved.
+		const mainRepo = join(tmpDir, "main");
+		const wtGitDir = join(mainRepo, ".git", "worktrees", "wt");
+		mkdirSync(wtGitDir, { recursive: true });
+		writeFileSync(join(wtGitDir, "commondir"), "../..\n");
+		initSeedsDir(mainRepo);
+		const wtDir = join(tmpDir, "wt");
+		mkdirSync(join(wtDir, "nested"), { recursive: true });
+		writeFileSync(join(wtDir, ".git"), "gitdir: ../main/.git/worktrees/wt\n");
+		initSeedsDir(wtDir);
+
+		expect(await findSeedsDir(wtDir)).toBe(join(mainRepo, ".seeds"));
+		expect(isInsideWorktree(join(wtDir, "nested"))).toBe(true);
+		expect(isInsideWorktree(mainRepo)).toBe(false);
+	});
+
+	test("defers to git when GIT_DIR is set", () => {
+		const mainRepo = join(tmpDir, "main");
+		mkdirSync(mainRepo);
+		git(["init"], mainRepo);
+		writeFileSync(join(mainRepo, "README.md"), "hello");
+		git(["add", "."], mainRepo);
+		git(["-c", "user.email=t@t", "-c", "user.name=T", "commit", "-m", "init"], mainRepo);
+		const wtDir = join(tmpDir, "wt");
+		git(["worktree", "add", wtDir, "-b", "wt-branch"], mainRepo);
+
+		const prev = process.env.GIT_DIR;
+		process.env.GIT_DIR = join(mainRepo, ".git");
+		try {
+			// git honors GIT_DIR over the worktree's .git pointer file.
+			expect(isInsideWorktree(wtDir)).toBe(false);
+		} finally {
+			if (prev === undefined) delete process.env.GIT_DIR;
+			else process.env.GIT_DIR = prev;
+		}
+		expect(isInsideWorktree(wtDir)).toBe(true);
+	});
+});
