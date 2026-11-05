@@ -195,9 +195,8 @@ consistent.
 Seeds dogfoods seeds: the work queue for this repo lives in
 `.seeds/issues.jsonl` and is driven entirely through the `sd` CLI.
 
-1. **Prime context.** At session start run `sd prime` (and `ml prime`
-   if mulch is the active context). Read this file, `CLAUDE.md`, and
-   the latest `CHANGELOG.md` entry.
+1. **Prime context.** At session start run `sd prime`. Read this file,
+   `CLAUDE.md`, and the latest `CHANGELOG.md` entry.
 2. **Find unblocked work.** `sd ready` lists open issues with no
    unresolved blockers. Use `sd search <query>` to locate related
    issues.
@@ -218,8 +217,6 @@ Seeds dogfoods seeds: the work queue for this repo lives in
    with `sd create`. Then `sd sync` stages and commits the `.seeds/`
    changes. Do **not** `git push` unless the user asks — leave commits
    local.
-9. **Record insights.** If mulch is in use, `ml record <domain>` any
-   convention discovered, pattern applied, or failure encountered.
 
 There is a repo-local skill at
 `.factory/skills/seeds-issue-workflow/SKILL.md` that walks an agent
