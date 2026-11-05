@@ -60,6 +60,8 @@ sd sync
 
 Every command supports `--json` for structured output. `sd list`, `sd ready`, `sd search`, `sd show`, `sd blocked`, and `sd stats` also accept `--format <markdown|compact|plain|ids|json>`; `--json` is an alias for `--format json`. The `ids` mode prints issue IDs one per line for shell pipelines, e.g. `sd list --label bug --format ids | xargs sd close`. Global flags: `-v`/`--version`, `-q`/`--quiet`, `--verbose`, `--timing`. ANSI colors respect `NO_COLOR`.
 
+JSON output is an envelope: `{success, command, ...payload}`. `command` is the full subcommand path (`"dep add"`, `"tpl step add"`) and is the same string whether the call succeeds or fails; failures carry `success: false` and `error`. Payload keys mirror the record they describe (Issue fields and dep/label ids are camelCase, plan references are snake_case like `plan_id`). Keys are only ever added, never renamed; `src/json-contract.test.ts` pins them. `sd config schema` is the exception: it prints the bare JSON Schema document.
+
 ### Issue Commands
 
 | Command | Description |

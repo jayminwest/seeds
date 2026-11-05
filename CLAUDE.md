@@ -78,6 +78,7 @@ seeds/
     test-harness.ts           # In-process test harness (captures stdout/stderr/exitCode)
     test-harness.test.ts      # Test harness self-tests
     cli-smoke.test.ts         # CLI binary smoke tests (real subprocess)
+    json-contract.test.ts     # --json envelope contract for every command
     markers.test.ts           # Marker section tests
     store.test.ts             # Core data layer tests
     store-lock.test.ts        # Lock owner record + dead-holder reclaim

@@ -32,6 +32,28 @@ export function routeCommanderErrors(cmd: Command): void {
 }
 
 /**
+ * The space-joined subcommand path argv invokes (`"dep add"`, `"tpl step add"`),
+ * so a failure envelope's `command` matches the one the same invocation
+ * reports on success (seeds-7f39). Options are skipped; the walk stops at the
+ * first token that is not a subcommand of the current command. Falls back to
+ * argv[2] when no top-level command matches (unknown command, or registration
+ * never ran).
+ */
+export function resolveCommandPath(program: Command, argv: string[]): string | undefined {
+	const path: string[] = [];
+	let current = program;
+	for (const token of argv.slice(2)) {
+		if (token.startsWith("-")) continue;
+		const sub = current.commands.find((c) => c.name() === token || c.aliases().includes(token));
+		if (!sub) break;
+		path.push(sub.name());
+		current = sub;
+		if (current.commands.length === 0) break;
+	}
+	return path.length > 0 ? path.join(" ") : argv[2];
+}
+
+/**
  * Handle a top-level error from the CLI's main() promise chain.
  *
  * Under `SEEDS_DEBUG=1` the stack goes to stderr, never stdout, so the --json

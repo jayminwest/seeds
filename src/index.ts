@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import chalk from "chalk";
 import { Command, Help } from "commander";
-import { handleTopLevelError, routeCommanderErrors } from "./error-handler.ts";
+import { handleTopLevelError, resolveCommandPath, routeCommanderErrors } from "./error-handler.ts";
 import { brand, muted, outputJson, setQuiet } from "./output.ts";
 import { registerAll } from "./register-all.ts";
 import { suggestForUnknown } from "./suggestions.ts";
@@ -132,4 +132,6 @@ async function main(): Promise<void> {
 	await program.parseAsync(process.argv);
 }
 
-main().catch((err: unknown) => handleTopLevelError(err, { jsonMode, cmd: process.argv[2] }));
+main().catch((err: unknown) =>
+	handleTopLevelError(err, { jsonMode, cmd: resolveCommandPath(program, process.argv) }),
+);

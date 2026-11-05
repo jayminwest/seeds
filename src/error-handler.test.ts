@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Command, CommanderError } from "commander";
-import { handleTopLevelError, routeCommanderErrors } from "./error-handler.ts";
+import { handleTopLevelError, resolveCommandPath, routeCommanderErrors } from "./error-handler.ts";
 
 describe("handleTopLevelError", () => {
 	beforeEach(() => {
@@ -189,5 +189,39 @@ describe("commander errors (seeds-cb18)", () => {
 		expect(thrown).toBeInstanceOf(CommanderError);
 		expect((thrown as CommanderError).message).toBe("error: missing required argument 'id'");
 		expect(errOut).toHaveLength(0);
+	});
+});
+
+describe("resolveCommandPath", () => {
+	const program = new Command();
+	program.command("create");
+	const tpl = program.command("tpl");
+	tpl.command("step").command("add").argument("<id>");
+	tpl.command("list");
+	program.command("show").argument("<id>");
+	const argv = (...rest: string[]): string[] => ["bun", "sd", ...rest];
+
+	test("joins nested subcommand names", () => {
+		expect(resolveCommandPath(program, argv("tpl", "step", "add", "x"))).toBe("tpl step add");
+		expect(resolveCommandPath(program, argv("tpl", "list", "--json"))).toBe("tpl list");
+	});
+
+	test("skips options, including ones before the command", () => {
+		expect(resolveCommandPath(program, argv("--json", "tpl", "--quiet", "list"))).toBe("tpl list");
+	});
+
+	test("stops at a leaf so positionals are never read as subcommands", () => {
+		expect(resolveCommandPath(program, argv("show", "list"))).toBe("show");
+	});
+
+	test("stops at the deepest matched group when the subcommand is missing or unknown", () => {
+		expect(resolveCommandPath(program, argv("tpl"))).toBe("tpl");
+		expect(resolveCommandPath(program, argv("tpl", "nope"))).toBe("tpl");
+	});
+
+	test("falls back to argv[2] when no top-level command matches", () => {
+		expect(resolveCommandPath(program, argv("bogus"))).toBe("bogus");
+		expect(resolveCommandPath(new Command(), argv("tpl", "list"))).toBe("tpl");
+		expect(resolveCommandPath(program, argv())).toBeUndefined();
 	});
 });

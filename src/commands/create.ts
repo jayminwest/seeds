@@ -57,8 +57,7 @@ async function runCreate(opts: CreateOptions, seedsDir?: string): Promise<void> 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const config = await readConfig(dir);
 
-	let createdId = "";
-	await withLock(issuesPath(dir), async () => {
+	const created = await withLock(issuesPath(dir), async () => {
 		const existing = await readIssues(dir);
 		const existingIds = new Set(existing.map((i) => i.id));
 		if (from && !existingIds.has(from)) throw new Error(`--from issue not found: ${from}`);
@@ -79,13 +78,14 @@ async function runCreate(opts: CreateOptions, seedsDir?: string): Promise<void> 
 			...(intent ? { intent } : {}),
 		};
 		await appendIssue(dir, issue);
-		createdId = id;
+		return issue;
 	});
 
 	if (jsonMode) {
-		await outputJson({ success: true, command: "create", id: createdId });
+		// `id` stays top-level for existing consumers; `issue` matches update/show (seeds-7f39).
+		await outputJson({ success: true, command: "create", id: created.id, issue: created });
 	} else {
-		printSuccess(`Created ${createdId}`);
+		printSuccess(`Created ${created.id}`);
 	}
 }
 
